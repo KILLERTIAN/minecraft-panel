@@ -32,7 +32,7 @@ services:
       retries: 10
 
   panel:
-    build: ./panel
+    image: omsharma050322/mc-panel:latest
     container_name: panel
     environment:
       ADMIN_PASSWORD: "${ADMIN_PASSWORD}"
