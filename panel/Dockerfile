@@ -1,5 +1,5 @@
 # ---- deps: install + compile native modules ----
-FROM node:24-alpine AS deps
+FROM node:22-alpine AS deps
 RUN apk add --no-cache python3 make g++ libc6-compat
 WORKDIR /app
 RUN corepack enable
@@ -11,7 +11,7 @@ RUN pnpm rebuild better-sqlite3 \
  && test -f node_modules/better-sqlite3/build/Release/better_sqlite3.node
 
 # ---- builder: build Next standalone ----
-FROM node:24-alpine AS builder
+FROM node:22-alpine AS builder
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 RUN corepack enable
@@ -21,7 +21,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
 # ---- runner: minimal runtime ----
-FROM node:24-alpine AS runner
+FROM node:22-alpine AS runner
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 ENV NODE_ENV=production
