@@ -1,0 +1,63 @@
+services:
+  minecraft:
+    image: itzg/minecraft-server:latest
+    container_name: mc
+    tty: true
+    stdin_open: true
+    ports:
+      - "25565:25565"
+    environment:
+      EULA: "TRUE"
+      TYPE: "FABRIC"
+      VERSION: "26.1.2"
+      FABRIC_LOADER_VERSION: "0.19.3"
+      ONLINE_MODE: "FALSE"
+      MEMORY: "${MC_MEMORY:-3G}"
+      USE_AIKAR_FLAGS: "true"
+      ENABLE_RCON: "true"
+      RCON_PORT: "25575"
+      RCON_PASSWORD: "${RCON_PASSWORD}"
+      ENABLE_WHITELIST: "false"
+      ENFORCE_WHITELIST: "false"
+      OVERRIDE_WHITELIST: "false"
+      MODRINTH_PROJECTS: ""
+      MOTD: "Personal server - powered by MC Panel"
+    volumes:
+      - mc-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mc-health"]
+      start_period: 1m
+      interval: 30s
+      retries: 10
+
+  panel:
+    build: ./panel
+    container_name: panel
+    ports:
+      - "${PANEL_PORT:-3000}:3000"
+    environment:
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD}"
+      JWT_SECRET: "${JWT_SECRET}"
+      MC_CONTAINER: "mc"
+      RCON_HOST: "mc"
+      RCON_PORT: "25575"
+      RCON_PASSWORD: "${RCON_PASSWORD}"
+      MC_DATA_PATH: "/mc-data"
+      WORLD_NAME: "${WORLD_NAME:-world}"
+      SERVER_ADDRESS: "${SERVER_ADDRESS:-localhost:25565}"
+      PANEL_DATA_DIR: "/app/data"
+      GDRIVE_SERVICE_ACCOUNT_KEY: "${GDRIVE_SERVICE_ACCOUNT_KEY:-}"
+      GDRIVE_FOLDER_ID: "${GDRIVE_FOLDER_ID:-}"
+      BACKUP_SCHEDULE: "${BACKUP_SCHEDULE:-}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # control mc container
+      - mc-data:/mc-data # read world for stats; read/write for restore
+      - panel-data:/app/data # SQLite + temp backups
+    depends_on:
+      - minecraft
+    restart: unless-stopped
+
+volumes:
+  mc-data:
+  panel-data:

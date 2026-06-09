@@ -1,0 +1,8 @@
+# pnpm 11 reads build-script approvals here (no longer from package.json).
+onlyBuiltDependencies:
+  - better-sqlite3
+  - sharp
+  - cpu-features
+  - ssh2
+  - protobufjs
+minimumReleaseAge: 0

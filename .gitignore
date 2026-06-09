@@ -1,0 +1,20 @@
+# env
+.env
+.env.local
+
+# build artifacts
+panel/node_modules
+panel/.next
+panel/.pnpm-store
+
+# runtime data
+panel/data
+panel/public/*.zip
+panel/public/*.tar.gz
+
+# logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

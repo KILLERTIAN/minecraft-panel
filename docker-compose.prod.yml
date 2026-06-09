@@ -1,0 +1,28 @@
+# Production overlay: adds Caddy reverse proxy with automatic HTTPS.
+# Usage on VPS:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+services:
+  panel:
+    # Don't expose the panel port directly on the host in prod; Caddy fronts it.
+    ports: !reset []
+    environment:
+      # Behind Caddy HTTPS -> enforce secure cookies.
+      COOKIE_SECURE: "true"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - panel
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:

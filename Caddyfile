@@ -1,0 +1,5 @@
+# Auto HTTPS via Let's Encrypt. Replace the domain if it changes.
+minecraft.garcade.in {
+	# WebSocket console + everything else -> panel container.
+	reverse_proxy panel:3000
+}
