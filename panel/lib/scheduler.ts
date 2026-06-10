@@ -42,9 +42,15 @@ export function applyIdleShutdown(minutes: number): void {
       }
 
       const now = Date.now();
-      if (idleSinceMs === null) { idleSinceMs = now; return; }
+      if (idleSinceMs === null) {
+        idleSinceMs = now;
+        console.log(`[scheduler] idle started, will shut down in ${minutes} min`);
+        return;
+      }
 
       const idleMs = now - idleSinceMs;
+      const idleMinElapsed = Math.round(idleMs / 60000);
+      console.log(`[scheduler] idle ${idleMinElapsed}/${minutes} min`);
       if (idleMs >= minutes * 60 * 1000) {
         console.log(`[scheduler] server idle ${minutes}min — shutting down`);
         idleSinceMs = null;
@@ -65,6 +71,10 @@ export function initSchedule(): void {
   const saved = getSetting("backup_schedule") || process.env.BACKUP_SCHEDULE || "";
   if (saved) applySchedule(saved);
 
-  const idleMin = parseInt(getSetting("idle_shutdown_minutes") || "0", 10);
+  const idleMin = parseInt(
+    getSetting("idle_shutdown_minutes") || process.env.IDLE_SHUTDOWN_MINUTES || "0",
+    10
+  );
+  console.log(`[scheduler] idle_shutdown_minutes = ${idleMin}`);
   if (idleMin > 0) applyIdleShutdown(idleMin);
 }
