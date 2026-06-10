@@ -28,6 +28,134 @@ function itemName(id: string): string {
   return id.replace("minecraft:", "").replace(/_/g, " ");
 }
 
+// Minecraft slot layout:
+// Slots 0-8: hotbar
+// Slots 9-35: main inventory (rows 1-3)
+// Slots 36-39: armor (head/chest/legs/feet)
+// Slots 40: offhand
+// Ender chest: slots 0-26
+
+const SLOT_SIZE = 44;
+const SLOT_STYLE: React.CSSProperties = {
+  width: SLOT_SIZE,
+  height: SLOT_SIZE,
+  background: "rgba(0,0,0,0.35)",
+  border: "2px solid rgba(255,255,255,0.12)",
+  borderRadius: 4,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  position: "relative",
+  fontSize: 10,
+  flexShrink: 0,
+};
+
+function SlotCell({ item, title }: { item?: InvItem; title?: string }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      style={{ ...SLOT_STYLE, borderColor: hovered && item ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.12)", cursor: item ? "default" : undefined }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      title={item ? `${itemName(item.id)} ×${item.count}` : title || ""}
+    >
+      {item ? (
+        <>
+          <span style={{ fontSize: 20 }}>{itemEmoji(item.id)}</span>
+          {item.count > 1 && (
+            <span style={{ position: "absolute", bottom: 2, right: 4, fontSize: 10, fontWeight: 700, color: "#fff", textShadow: "1px 1px 0 #000" }}>
+              {item.count}
+            </span>
+          )}
+          {hovered && (
+            <div style={{
+              position: "absolute", bottom: "calc(100% + 4px)", left: "50%", transform: "translateX(-50%)",
+              background: "#1a1a2e", border: "1px solid var(--border)", borderRadius: 6,
+              padding: "4px 8px", fontSize: 11, whiteSpace: "nowrap", zIndex: 200,
+              color: "var(--text)", pointerEvents: "none",
+              textTransform: "capitalize",
+            }}>
+              {itemName(item.id)}
+              {item.count > 1 && <span style={{ color: "var(--accent)", marginLeft: 4 }}>×{item.count}</span>}
+            </div>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function itemEmoji(id: string): string {
+  const n = id.replace("minecraft:", "");
+  const map: Record<string, string> = {
+    diamond_sword: "⚔️", iron_sword: "⚔️", stone_sword: "⚔️", wooden_sword: "⚔️", golden_sword: "⚔️", netherite_sword: "⚔️",
+    bow: "🏹", crossbow: "🏹", arrow: "🏹", tipped_arrow: "🏹",
+    diamond_pickaxe: "⛏️", iron_pickaxe: "⛏️", stone_pickaxe: "⛏️", wooden_pickaxe: "⛏️", golden_pickaxe: "⛏️", netherite_pickaxe: "⛏️",
+    diamond_axe: "🪓", iron_axe: "🪓", stone_axe: "🪓", wooden_axe: "🪓", golden_axe: "🪓", netherite_axe: "🪓",
+    diamond_shovel: "🪏", iron_shovel: "🪏", stone_shovel: "🪏", wooden_shovel: "🪏",
+    diamond_helmet: "⛑️", iron_helmet: "⛑️", leather_helmet: "⛑️", netherite_helmet: "⛑️", golden_helmet: "⛑️",
+    diamond_chestplate: "🦺", iron_chestplate: "🦺", leather_chestplate: "🦺", netherite_chestplate: "🦺",
+    diamond_leggings: "👖", iron_leggings: "👖", leather_leggings: "👖", netherite_leggings: "👖",
+    diamond_boots: "👟", iron_boots: "👟", leather_boots: "👟", netherite_boots: "👟",
+    apple: "🍎", golden_apple: "🍎", enchanted_golden_apple: "🍎",
+    bread: "🍞", cooked_beef: "🥩", cooked_porkchop: "🥩", cooked_chicken: "🍗",
+    beef: "🥩", porkchop: "🥩", chicken: "🍗",
+    torch: "🔦", lantern: "🏮", soul_lantern: "🏮",
+    dirt: "🟫", grass_block: "🟩", stone: "🪨", cobblestone: "🪨", gravel: "⬜",
+    sand: "🟡", sandstone: "🟡", glass: "🪟",
+    wood: "🪵", oak_log: "🪵", birch_log: "🪵", spruce_log: "🪵", jungle_log: "🪵",
+    oak_planks: "🟫", birch_planks: "🟫",
+    chest: "📦", barrel: "📦", shulker_box: "📦",
+    book: "📖", enchanted_book: "📖", writable_book: "📖",
+    map: "🗺️", filled_map: "🗺️",
+    compass: "🧭", clock: "🕐",
+    fishing_rod: "🎣",
+    flint_and_steel: "🔥",
+    ender_pearl: "🟢", eye_of_ender: "🟢",
+    diamond: "💎", emerald: "💚", gold_ingot: "🟡", iron_ingot: "⬜",
+    coal: "⬛", redstone: "🔴", lapis_lazuli: "🔵",
+    blaze_rod: "🔥", blaze_powder: "🔥",
+    string: "🧵", feather: "🪶", leather: "🟤",
+    bone: "🦴", bone_meal: "⬜",
+    gunpowder: "💥", tnt: "💥",
+    saddle: "🐴", lead: "🪢",
+    shield: "🛡️",
+    totem_of_undying: "🗿",
+    potion: "🧪", splash_potion: "🧪", lingering_potion: "🧪",
+    glass_bottle: "🍶",
+    bucket: "🪣", water_bucket: "🪣", lava_bucket: "🪣", milk_bucket: "🪣",
+    snowball: "❄️", snow_block: "❄️",
+    egg: "🥚",
+    nether_star: "⭐", beacon: "⭐",
+  };
+  if (map[n]) return map[n];
+  if (n.includes("sword")) return "⚔️";
+  if (n.includes("pickaxe")) return "⛏️";
+  if (n.includes("axe")) return "🪓";
+  if (n.includes("helmet") || n.includes("cap")) return "⛑️";
+  if (n.includes("chestplate") || n.includes("tunic")) return "🦺";
+  if (n.includes("leggings") || n.includes("pants")) return "👖";
+  if (n.includes("boots")) return "👟";
+  if (n.includes("log") || n.includes("wood") || n.includes("plank")) return "🪵";
+  if (n.includes("stone") || n.includes("rock")) return "🪨";
+  if (n.includes("ore")) return "💎";
+  if (n.includes("potion")) return "🧪";
+  if (n.includes("food") || n.includes("stew") || n.includes("soup")) return "🍲";
+  return "📦";
+}
+
+function InventoryGrid({ items, slots, cols, label }: { items: InvItem[]; slots: number[]; cols: number; label: string }) {
+  const bySlot = new Map(items.map((it) => [it.slot, it]));
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600, marginBottom: 6 }}>{label}</div>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, ${SLOT_SIZE}px)`, gap: 3 }}>
+        {slots.map((s) => <SlotCell key={s} item={bySlot.get(s)} />)}
+      </div>
+    </div>
+  );
+}
+
 function InventoryPanel({ uuid }: { uuid: string }) {
   const [items, setItems] = useState<InvItem[] | null>(null);
   const [ender, setEnder] = useState<InvItem[]>([]);
@@ -35,67 +163,38 @@ function InventoryPanel({ uuid }: { uuid: string }) {
     fetch(`/api/players/${uuid}/inventory`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (d) {
-          setItems(d.inventory || []);
-          setEnder(d.enderItems || []);
-        } else setItems([]);
+        if (d) { setItems(d.inventory || []); setEnder(d.enderItems || []); }
+        else setItems([]);
       });
   }, [uuid]);
 
-  if (items === null)
-    return <div style={{ color: "var(--text-dim)", marginTop: 10 }}>Loading…</div>;
+  if (items === null) return <div style={{ color: "var(--text-dim)", marginTop: 10 }}>Loading…</div>;
   if (items.length === 0 && ender.length === 0)
-    return (
-      <div style={{ color: "var(--text-dim)", marginTop: 10 }}>Inventory empty</div>
-    );
+    return <div style={{ color: "var(--text-dim)", marginTop: 10 }}>Inventory empty</div>;
 
-  const render = (label: string, list: InvItem[]) =>
-    list.length > 0 && (
-      <div style={{ marginTop: 12 }}>
-        <div className="stat label" style={{ marginBottom: 6 }}>
-          {label}
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-            gap: 6,
-          }}
-        >
-          {list
-            .slice()
-            .sort((a, b) => a.slot - b.slot)
-            .map((it, i) => (
-              <div
-                key={i}
-                style={{
-                  background: "var(--bg-elev2)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 8,
-                  padding: "6px 10px",
-                  fontSize: 12.5,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 8,
-                }}
-              >
-                <span style={{ textTransform: "capitalize" }}>
-                  {itemName(it.id)}
-                </span>
-                <span style={{ color: "var(--accent)", fontWeight: 700 }}>
-                  ×{it.count}
-                </span>
-              </div>
-            ))}
-        </div>
-      </div>
-    );
+  // Minecraft slot layout
+  const mainSlots = Array.from({ length: 27 }, (_, i) => i + 9); // 9-35
+  const hotbarSlots = Array.from({ length: 9 }, (_, i) => i);    // 0-8
+  const armorSlots = [36, 37, 38, 39];                            // head→feet
+  const offhandSlot = [40];
+  const enderSlots = Array.from({ length: 27 }, (_, i) => i);
 
   return (
-    <>
-      {render("Inventory", items)}
-      {render("Ender Chest", ender)}
-    </>
+    <div style={{ marginTop: 16, overflowX: "auto" }}>
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
+        <div>
+          <InventoryGrid items={items} slots={armorSlots} cols={1} label="Armor" />
+          <InventoryGrid items={items} slots={offhandSlot} cols={1} label="Offhand" />
+        </div>
+        <div>
+          <InventoryGrid items={items} slots={mainSlots} cols={9} label="Inventory" />
+          <InventoryGrid items={items} slots={hotbarSlots} cols={9} label="Hotbar" />
+        </div>
+      </div>
+      {ender.length > 0 && (
+        <InventoryGrid items={ender} slots={enderSlots} cols={9} label="Ender Chest" />
+      )}
+    </div>
   );
 }
 
