@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { Terminal, Send, Wifi, WifiOff, Trash2 } from "lucide-react";
 
 interface Line {
   id: number;
@@ -17,6 +18,8 @@ export default function ConsolePage() {
   const [lines, setLines] = useState<Line[]>([]);
   const [connected, setConnected] = useState(false);
   const [cmd, setCmd] = useState("");
+  const [history, setHistory] = useState<string[]>([]);
+  const [histIdx, setHistIdx] = useState(-1);
   const counter = useRef(0);
   const boxRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -25,7 +28,6 @@ export default function ConsolePage() {
     setLines((prev) => {
       const next = [...prev];
       for (const t of texts) next.push({ id: counter.current++, text: t });
-      // Cap rendered lines.
       return next.slice(-500);
     });
   }, []);
@@ -60,6 +62,8 @@ export default function ConsolePage() {
     e.preventDefault();
     const c = cmd.trim();
     if (!c) return;
+    setHistory((h) => [c, ...h.slice(0, 49)]);
+    setHistIdx(-1);
     setCmd("");
     const r = await fetch("/api/server/command", {
       method: "POST",
@@ -68,24 +72,62 @@ export default function ConsolePage() {
     });
     const d = await r.json();
     if (!r.ok) push([`[panel] error: ${d.error}`]);
-    else if (d.output) push([`[panel] > ${c}`, d.output]);
-    else push([`[panel] > ${c}`]);
+    else if (d.output) push([`[rcon] > ${c}`, d.output]);
+    else push([`[rcon] > ${c}`]);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const idx = Math.min(histIdx + 1, history.length - 1);
+      setHistIdx(idx);
+      if (history[idx]) setCmd(history[idx]);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const idx = Math.max(histIdx - 1, -1);
+      setHistIdx(idx);
+      setCmd(idx === -1 ? "" : history[idx]);
+    }
   }
 
   return (
-    <>
-      <div className="page-title">Console</div>
-      <div className="page-sub">
-        Live server logs ·{" "}
-        <span style={{ color: connected ? "var(--accent)" : "var(--warn)" }}>
-          {connected ? "connected" : "disconnected"}
-        </span>
+    <div className="animate-in">
+      <div className="page-header">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h1 className="page-title">Console</h1>
+            <p className="page-sub" style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 5 }}>
+              Live server output ·{" "}
+              <span style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                color: connected ? "var(--accent)" : "var(--warn)",
+                fontWeight: 600,
+              }}>
+                {connected
+                  ? <><Wifi size={12} /> Connected</>
+                  : <><WifiOff size={12} /> Disconnected</>
+                }
+              </span>
+            </p>
+          </div>
+          <button
+            className="btn-ghost"
+            onClick={() => setLines([])}
+            style={{ padding: "8px 14px" }}
+          >
+            <Trash2 size={14} />
+            Clear
+          </button>
+        </div>
       </div>
 
       <div className="console" ref={boxRef} onScroll={onScroll}>
         {lines.length === 0 && (
-          <div style={{ color: "var(--text-dim)" }}>
-            Waiting for server output… (start the server if it's offline)
+          <div style={{ color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 8 }}>
+            <Terminal size={14} />
+            Waiting for server output… start the server if it's offline.
           </div>
         )}
         {lines.map((l) => (
@@ -95,17 +137,33 @@ export default function ConsolePage() {
         ))}
       </div>
 
-      <form onSubmit={send} style={{ display: "flex", gap: 10, marginTop: 14 }}>
-        <input
-          placeholder="Type a command (e.g. say hello, time set day, weather clear)"
-          value={cmd}
-          onChange={(e) => setCmd(e.target.value)}
-          style={{ fontFamily: "var(--mono)" }}
-        />
-        <button className="btn-primary" type="submit" disabled={!cmd.trim()}>
+      <form onSubmit={send} style={{ display: "flex", gap: 10, marginTop: 12 }}>
+        <div style={{ position: "relative", flex: 1 }}>
+          <span style={{
+            position: "absolute",
+            left: 14,
+            top: "50%",
+            transform: "translateY(-50%)",
+            color: "var(--accent)",
+            fontFamily: "var(--mono)",
+            fontSize: 14,
+            pointerEvents: "none",
+          }}>
+            /
+          </span>
+          <input
+            placeholder="say hello · time set day · weather clear · ↑↓ history"
+            value={cmd}
+            onChange={(e) => setCmd(e.target.value)}
+            onKeyDown={handleKeyDown}
+            style={{ fontFamily: "var(--mono)", paddingLeft: 26 }}
+          />
+        </div>
+        <button className="btn-primary" type="submit" disabled={!cmd.trim()} style={{ flexShrink: 0 }}>
+          <Send size={15} />
           Send
         </button>
       </form>
-    </>
+    </div>
   );
 }

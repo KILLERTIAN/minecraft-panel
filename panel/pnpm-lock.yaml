@@ -29,6 +29,9 @@ importers:
       jose:
         specifier: ^5.9.6
         version: 5.10.0
+      lucide-react:
+        specifier: ^1.17.0
+        version: 1.17.0(react@19.2.7)
       next:
         specifier: ^16.0.0
         version: 16.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -810,6 +813,11 @@ packages:
 
   lru-cache@10.4.3:
     resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
+
+  lucide-react@1.17.0:
+    resolution: {integrity: sha512-9FA9evdox/JQL5PT57fdA1x/yg8T7knJ98+zjTL3UfKza6pflQUUh3XtaQIHKvnsJw1lmsEyHVlt5jchYxOQ5w==}
+    peerDependencies:
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
@@ -1936,6 +1944,10 @@ snapshots:
   long@5.3.2: {}
 
   lru-cache@10.4.3: {}
+
+  lucide-react@1.17.0(react@19.2.7):
+    dependencies:
+      react: 19.2.7
 
   math-intrinsics@1.1.0: {}
 

@@ -1,23 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SlidersHorizontal, Zap, Save, RotateCcw, Timer, Check, AlertCircle } from "lucide-react";
 
-const FIELD_META: Record<string, { label: string; type: "text" | "select" | "bool" | "number"; options?: string[]; live?: boolean }> = {
-  motd: { label: "Server MOTD", type: "text" },
-  "max-players": { label: "Max Players", type: "number", live: true },
+const FIELD_META: Record<string, {
+  label: string;
+  type: "text" | "select" | "bool" | "number";
+  options?: string[];
+  live?: boolean;
+  desc?: string;
+}> = {
+  motd: { label: "Server MOTD", type: "text", desc: "Message shown in server list" },
+  "max-players": { label: "Max Players", type: "number", live: true, desc: "Maximum concurrent players" },
   difficulty: { label: "Difficulty", type: "select", options: ["peaceful", "easy", "normal", "hard"], live: true },
   gamemode: { label: "Default Gamemode", type: "select", options: ["survival", "creative", "adventure", "spectator"], live: true },
-  hardcore: { label: "Hardcore Mode", type: "bool" },
-  pvp: { label: "PvP", type: "bool", live: true },
+  hardcore: { label: "Hardcore Mode", type: "bool", desc: "Players are banned on death" },
+  pvp: { label: "PvP", type: "bool", live: true, desc: "Player vs player combat" },
   "allow-flight": { label: "Allow Flight", type: "bool" },
   "allow-nether": { label: "Allow Nether", type: "bool" },
   "enable-command-block": { label: "Command Blocks", type: "bool" },
   "force-gamemode": { label: "Force Gamemode on Join", type: "bool" },
-  "online-mode": { label: "Online Mode (auth)", type: "bool" },
-  "player-idle-timeout": { label: "Idle Timeout (min, 0=off)", type: "number" },
+  "online-mode": { label: "Online Mode (auth)", type: "bool", desc: "Requires Mojang auth" },
+  "player-idle-timeout": { label: "Idle Timeout (min)", type: "number", desc: "0 = disabled" },
   "spawn-protection": { label: "Spawn Protection Radius", type: "number" },
   "view-distance": { label: "View Distance (chunks)", type: "number" },
-  "simulation-distance": { label: "Simulation Distance (chunks)", type: "number" },
+  "simulation-distance": { label: "Simulation Distance", type: "number" },
   "spawn-animals": { label: "Spawn Animals", type: "bool" },
   "spawn-monsters": { label: "Spawn Monsters", type: "bool" },
   "spawn-npcs": { label: "Spawn Villagers", type: "bool" },
@@ -26,11 +33,74 @@ const FIELD_META: Record<string, { label: string; type: "text" | "select" | "boo
   "enforce-whitelist": { label: "Enforce Whitelist", type: "bool", live: true },
 };
 
+function FieldInput({
+  fieldKey,
+  meta,
+  value,
+  onChange,
+}: {
+  fieldKey: string;
+  meta: typeof FIELD_META[string];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  if (meta.type === "bool") {
+    return (
+      <div style={{ display: "flex", gap: 6 }}>
+        {(["true", "false"] as const).map((opt) => (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => onChange(opt)}
+            style={{
+              flex: 1,
+              padding: "8px 12px",
+              borderRadius: "var(--radius-sm)",
+              border: `1px solid ${value === opt ? (opt === "true" ? "var(--accent)" : "var(--border)") : "var(--border)"}`,
+              background: value === opt
+                ? opt === "true" ? "var(--accent-dim)" : "var(--bg-elev2)"
+                : "var(--bg-elev2)",
+              color: value === opt
+                ? opt === "true" ? "var(--accent)" : "var(--text)"
+                : "var(--text-dim)",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "all var(--transition)",
+            }}
+          >
+            {opt === "true" ? "On" : "Off"}
+          </button>
+        ))}
+      </div>
+    );
+  }
+  if (meta.type === "select") {
+    return (
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        {meta.options!.map((o) => (
+          <option key={o} value={o}>
+            {o.charAt(0).toUpperCase() + o.slice(1)}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  return (
+    <input
+      type={meta.type === "number" ? "number" : "text"}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
+
 export default function SettingsPage() {
   const [props, setProps] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  const [msgType, setMsgType] = useState<"ok" | "err">("ok");
   const [idleMinutes, setIdleMinutes] = useState(0);
   const [idleSaving, setIdleSaving] = useState(false);
   const [idleMsg, setIdleMsg] = useState("");
@@ -53,13 +123,11 @@ export default function SettingsPage() {
     setSaving(true);
     setMsg("");
 
-    // Find changed keys
     const changed: Record<string, string> = {};
     for (const k of Object.keys(pending)) {
       if (pending[k] !== props[k]) changed[k] = pending[k];
     }
 
-    // Save to file
     const r = await fetch("/api/server/properties", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -69,11 +137,11 @@ export default function SettingsPage() {
     if (!r.ok) {
       const d = await r.json().catch(() => ({}));
       setMsg(d.error || "Save failed");
+      setMsgType("err");
       setSaving(false);
       return;
     }
 
-    // Try live-apply changed live-capable keys
     const liveKeys = Object.keys(changed).filter((k) => FIELD_META[k]?.live);
     let liveApplied: string[] = [];
     if (liveKeys.length > 0) {
@@ -89,14 +157,15 @@ export default function SettingsPage() {
 
     setProps(pending);
     setSaving(false);
+    setMsgType("ok");
 
     const needsRestart = Object.keys(changed).some((k) => !liveApplied.includes(k));
     if (liveApplied.length > 0 && !needsRestart) {
-      setMsg(`Applied live: ${liveApplied.join(", ")} — no restart needed.`);
+      setMsg(`Applied live: ${liveApplied.join(", ")} — no restart needed`);
     } else if (liveApplied.length > 0) {
-      setMsg(`Applied live: ${liveApplied.join(", ")}. Other changes need server restart.`);
+      setMsg(`Applied live: ${liveApplied.join(", ")} · Other changes need restart`);
     } else {
-      setMsg("Saved. Restart server to apply changes.");
+      setMsg("Saved · Restart server to apply changes");
     }
   }
 
@@ -110,53 +179,67 @@ export default function SettingsPage() {
     });
     setIdleSaving(false);
     if (r.ok) {
-      setIdleMsg(idleMinutes > 0 ? `Auto-shutdown after ${idleMinutes} min idle.` : "Auto-shutdown disabled.");
+      setIdleMsg(idleMinutes > 0 ? `Auto-shutdown after ${idleMinutes} min idle` : "Auto-shutdown disabled");
     } else {
-      setIdleMsg("Failed to save.");
+      setIdleMsg("Failed to save");
     }
   }
 
   const isDirty = JSON.stringify(props) !== JSON.stringify(pending);
+  const liveCount = Object.keys(FIELD_META).filter((k) => FIELD_META[k].live).length;
 
   return (
-    <>
-      <div className="page-title">Server Settings</div>
-      <div className="page-sub">
-        Settings marked <span style={{ color: "var(--accent)" }}>⚡ Live</span> apply instantly via RCON. Others require restart.
+    <div className="animate-in">
+      <div className="page-header">
+        <h1 className="page-title">Settings</h1>
+        <p className="page-sub">
+          Server configuration ·{" "}
+          <span style={{ color: "var(--accent)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <Zap size={12} />
+            {liveCount} settings apply instantly via RCON
+          </span>
+        </p>
       </div>
 
       <form onSubmit={save}>
         <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20 }}>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+            gap: 20,
+          }}>
             {Object.keys(FIELD_META).map((key) => {
               const meta = FIELD_META[key];
               const val = pending[key] ?? "";
+              const changed = val !== props[key];
               return (
-                <div key={key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <label style={{ fontSize: 12, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600, display: "flex", gap: 6, alignItems: "center" }}>
+                <div key={key} style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                  <label style={{
+                    fontSize: 11.5,
+                    color: "var(--text-dim)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    fontWeight: 700,
+                    display: "flex",
+                    gap: 6,
+                    alignItems: "center",
+                  }}>
                     {meta.label}
-                    {meta.live && <span style={{ color: "var(--accent)", fontSize: 10 }}>⚡ Live</span>}
+                    {meta.live && (
+                      <span className="chip chip-accent" style={{ fontSize: 10 }}>
+                        <Zap size={9} />
+                        Live
+                      </span>
+                    )}
+                    {changed && (
+                      <span className="chip" style={{ fontSize: 10, background: "rgba(245,166,35,0.1)", borderColor: "rgba(245,166,35,0.2)", color: "var(--warn)" }}>
+                        Modified
+                      </span>
+                    )}
                   </label>
-                  {meta.type === "bool" ? (
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {["true", "false"].map((opt) => (
-                        <button key={opt} type="button" onClick={() => change(key, opt)}
-                          className={val === opt ? "btn-primary" : "btn-ghost"}
-                          style={{ flex: 1, padding: "8px 12px" }}>
-                          {opt === "true" ? "On" : "Off"}
-                        </button>
-                      ))}
-                    </div>
-                  ) : meta.type === "select" ? (
-                    <select value={val} onChange={(e) => change(key, e.target.value)}
-                      style={{ background: "var(--bg-elev2)", border: "1px solid var(--border)", color: "var(--text)", borderRadius: "var(--radius)", padding: "10px 12px", fontSize: 14 }}>
-                      {meta.options!.map((o) => (
-                        <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input type={meta.type === "number" ? "number" : "text"} value={val}
-                      onChange={(e) => change(key, e.target.value)} />
+                  <FieldInput fieldKey={key} meta={meta} value={val} onChange={(v) => change(key, v)} />
+                  {meta.desc && (
+                    <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>{meta.desc}</div>
                   )}
                 </div>
               );
@@ -165,45 +248,91 @@ export default function SettingsPage() {
         </div>
 
         {msg && (
-          <div style={{ marginBottom: 12, fontSize: 13, color: msg.includes("failed") || msg.includes("Failed") ? "var(--danger)" : "var(--accent)" }}>
+          <div style={{
+            marginBottom: 14,
+            fontSize: 13,
+            display: "flex",
+            alignItems: "center",
+            gap: 7,
+            color: msgType === "err" ? "var(--danger)" : "var(--accent)",
+          }}>
+            {msgType === "ok" ? <Check size={14} /> : <AlertCircle size={14} />}
             {msg}
           </div>
         )}
 
-        <button type="submit" className="btn-primary" disabled={!isDirty || saving}>
-          {saving ? "Saving…" : "Save Changes"}
-        </button>
-        {isDirty && (
-          <button type="button" className="btn-ghost" style={{ marginLeft: 12 }} onClick={() => setPending(props)}>
-            Discard
+        <div style={{ display: "flex", gap: 10 }}>
+          <button type="submit" className="btn-primary" disabled={!isDirty || saving}>
+            {saving ? (
+              <>
+                <span style={{ width: 15, height: 15, border: "2px solid currentColor", borderTopColor: "transparent", borderRadius: "50%", display: "inline-block", animation: "spin 0.8s linear infinite" }} />
+                Saving…
+              </>
+            ) : (
+              <>
+                <Save size={15} />
+                Save Changes
+              </>
+            )}
           </button>
-        )}
+          {isDirty && (
+            <button type="button" className="btn-ghost" onClick={() => setPending(props)}>
+              <RotateCcw size={14} />
+              Discard
+            </button>
+          )}
+        </div>
       </form>
 
-      {/* Auto-shutdown */}
-      <div className="card" style={{ marginTop: 24 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Auto-Shutdown</div>
-        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 16 }}>
-          Automatically stop server when no players online for N minutes. Set 0 to disable.
+      {/* Auto-Shutdown */}
+      <div className="card" style={{ marginTop: 20 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 18 }}>
+          <div style={{ width: 38, height: 38, background: "rgba(245,166,35,0.1)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Timer size={18} color="var(--warn)" />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, letterSpacing: "-0.2px" }}>Auto-Shutdown</div>
+            <div style={{ color: "var(--text-dim)", fontSize: 13, marginTop: 2 }}>
+              Stop server automatically when no players are online. Set 0 to disable.
+            </div>
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <input
-            type="number"
-            min={0}
-            max={1440}
-            value={idleMinutes}
-            onChange={(e) => setIdleMinutes(Math.max(0, parseInt(e.target.value) || 0))}
-            style={{ width: 100 }}
-          />
-          <span style={{ color: "var(--text-dim)", fontSize: 13 }}>minutes</span>
-          <button className="btn-primary" onClick={saveIdle} disabled={idleSaving}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-elev2)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "8px 14px", width: 160 }}>
+            <input
+              type="number"
+              min={0}
+              max={1440}
+              value={idleMinutes}
+              onChange={(e) => setIdleMinutes(Math.max(0, parseInt(e.target.value) || 0))}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                width: 60,
+                fontSize: 15,
+                fontWeight: 700,
+                color: "var(--text)",
+              }}
+            />
+            <span style={{ color: "var(--text-dim)", fontSize: 13 }}>min</span>
+          </div>
+          <button className="btn-primary" onClick={saveIdle} disabled={idleSaving} type="button">
+            <Check size={14} />
             {idleSaving ? "Saving…" : "Apply"}
           </button>
         </div>
         {idleMsg && (
-          <div style={{ marginTop: 8, fontSize: 13, color: "var(--accent)" }}>{idleMsg}</div>
+          <div style={{ marginTop: 10, fontSize: 13, color: "var(--accent)", display: "flex", alignItems: "center", gap: 6 }}>
+            <Check size={13} />
+            {idleMsg}
+          </div>
         )}
       </div>
-    </>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
   );
 }

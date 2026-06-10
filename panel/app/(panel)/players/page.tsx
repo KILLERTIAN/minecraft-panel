@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import {
+  Users, Heart, Utensils, Star, MapPin, Skull,
+  Clock, ChevronDown, ChevronUp, MoreVertical, Loader2,
+} from "lucide-react";
 
 interface Player {
   uuid: string;
@@ -28,55 +32,66 @@ function itemName(id: string): string {
   return id.replace("minecraft:", "").replace(/_/g, " ");
 }
 
-// Minecraft slot layout:
-// Slots 0-8: hotbar
-// Slots 9-35: main inventory (rows 1-3)
-// Slots 36-39: armor (head/chest/legs/feet)
-// Slots 40: offhand
-// Ender chest: slots 0-26
-
-const SLOT_SIZE = 44;
+const SLOT_SIZE = 46;
 const SLOT_STYLE: React.CSSProperties = {
   width: SLOT_SIZE,
   height: SLOT_SIZE,
-  background: "rgba(0,0,0,0.35)",
-  border: "2px solid rgba(255,255,255,0.12)",
-  borderRadius: 4,
+  background: "rgba(0,0,0,0.4)",
+  border: "2px solid rgba(255,255,255,0.1)",
+  borderRadius: 6,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   position: "relative",
-  fontSize: 10,
   flexShrink: 0,
+  transition: "border-color 0.12s",
 };
 
 function SlotCell({ item, title }: { item?: InvItem; title?: string }) {
   const [hovered, setHovered] = useState(false);
   return (
     <div
-      style={{ ...SLOT_STYLE, borderColor: hovered && item ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.12)", cursor: item ? "default" : undefined }}
+      style={{
+        ...SLOT_STYLE,
+        borderColor: hovered && item ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.08)",
+        cursor: item ? "default" : undefined,
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       title={item ? `${itemName(item.id)} ×${item.count}` : title || ""}
     >
       {item ? (
         <>
-          <span style={{ fontSize: 20 }}>{itemEmoji(item.id)}</span>
+          <span style={{ fontSize: 22 }}>{itemEmoji(item.id)}</span>
           {item.count > 1 && (
-            <span style={{ position: "absolute", bottom: 2, right: 4, fontSize: 10, fontWeight: 700, color: "#fff", textShadow: "1px 1px 0 #000" }}>
+            <span style={{
+              position: "absolute", bottom: 2, right: 4,
+              fontSize: 10, fontWeight: 700, color: "#fff",
+              textShadow: "1px 1px 0 #000",
+            }}>
               {item.count}
             </span>
           )}
           {hovered && (
             <div style={{
-              position: "absolute", bottom: "calc(100% + 4px)", left: "50%", transform: "translateX(-50%)",
-              background: "#1a1a2e", border: "1px solid var(--border)", borderRadius: 6,
-              padding: "4px 8px", fontSize: 11, whiteSpace: "nowrap", zIndex: 200,
-              color: "var(--text)", pointerEvents: "none",
+              position: "absolute",
+              bottom: "calc(100% + 6px)",
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "var(--bg-elev3)",
+              border: "1px solid var(--border-bright)",
+              borderRadius: 8,
+              padding: "5px 10px",
+              fontSize: 11.5,
+              whiteSpace: "nowrap",
+              zIndex: 200,
+              color: "var(--text)",
+              pointerEvents: "none",
               textTransform: "capitalize",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
             }}>
               {itemName(item.id)}
-              {item.count > 1 && <span style={{ color: "var(--accent)", marginLeft: 4 }}>×{item.count}</span>}
+              {item.count > 1 && <span style={{ color: "var(--accent)", marginLeft: 5 }}>×{item.count}</span>}
             </div>
           )}
         </>
@@ -147,9 +162,11 @@ function itemEmoji(id: string): string {
 function InventoryGrid({ items, slots, cols, label }: { items: InvItem[]; slots: number[]; cols: number; label: string }) {
   const bySlot = new Map(items.map((it) => [it.slot, it]));
   return (
-    <div style={{ marginTop: 12 }}>
-      <div style={{ fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600, marginBottom: 6 }}>{label}</div>
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, ${SLOT_SIZE}px)`, gap: 3 }}>
+    <div style={{ marginTop: 14 }}>
+      <div style={{ fontSize: 10.5, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, marginBottom: 7 }}>
+        {label}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, ${SLOT_SIZE}px)`, gap: 4 }}>
         {slots.map((s) => <SlotCell key={s} item={bySlot.get(s)} />)}
       </div>
     </div>
@@ -159,6 +176,7 @@ function InventoryGrid({ items, slots, cols, label }: { items: InvItem[]; slots:
 function InventoryPanel({ uuid }: { uuid: string }) {
   const [items, setItems] = useState<InvItem[] | null>(null);
   const [ender, setEnder] = useState<InvItem[]>([]);
+
   useEffect(() => {
     fetch(`/api/players/${uuid}/inventory`)
       .then((r) => (r.ok ? r.json() : null))
@@ -168,45 +186,45 @@ function InventoryPanel({ uuid }: { uuid: string }) {
       });
   }, [uuid]);
 
-  if (items === null) return <div style={{ color: "var(--text-dim)", marginTop: 10 }}>Loading…</div>;
+  if (items === null) return (
+    <div style={{ color: "var(--text-dim)", marginTop: 12, display: "flex", alignItems: "center", gap: 7 }}>
+      <Loader2 size={14} style={{ animation: "spin 0.8s linear infinite" }} />
+      Loading inventory…
+    </div>
+  );
   if (items.length === 0 && ender.length === 0)
-    return <div style={{ color: "var(--text-dim)", marginTop: 10 }}>Inventory empty</div>;
+    return <div style={{ color: "var(--text-dim)", marginTop: 12, fontSize: 13 }}>Inventory is empty</div>;
 
-  // Minecraft slot layout
-  const mainSlots = Array.from({ length: 27 }, (_, i) => i + 9); // 9-35
-  const hotbarSlots = Array.from({ length: 9 }, (_, i) => i);    // 0-8
-  const armorSlots = [36, 37, 38, 39];                            // head→feet
+  const mainSlots = Array.from({ length: 27 }, (_, i) => i + 9);
+  const hotbarSlots = Array.from({ length: 9 }, (_, i) => i);
+  const armorSlots = [36, 37, 38, 39];
   const offhandSlot = [40];
   const enderSlots = Array.from({ length: 27 }, (_, i) => i);
 
   return (
-    <div style={{ marginTop: 16, overflowX: "auto" }}>
-      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
-        <div>
-          <InventoryGrid items={items} slots={armorSlots} cols={1} label="Armor" />
-          <InventoryGrid items={items} slots={offhandSlot} cols={1} label="Offhand" />
+    <div style={{ marginTop: 18, overflowX: "auto", padding: "18px 0 4px" }}>
+      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+        <div style={{ display: "flex", gap: 28, flexWrap: "wrap", alignItems: "flex-start" }}>
+          <div>
+            <InventoryGrid items={items} slots={armorSlots} cols={1} label="Armor" />
+            <InventoryGrid items={items} slots={offhandSlot} cols={1} label="Offhand" />
+          </div>
+          <div>
+            <InventoryGrid items={items} slots={mainSlots} cols={9} label="Inventory" />
+            <InventoryGrid items={items} slots={hotbarSlots} cols={9} label="Hotbar" />
+          </div>
         </div>
-        <div>
-          <InventoryGrid items={items} slots={mainSlots} cols={9} label="Inventory" />
-          <InventoryGrid items={items} slots={hotbarSlots} cols={9} label="Hotbar" />
-        </div>
+        {ender.length > 0 && (
+          <div style={{ marginTop: 20 }}>
+            <InventoryGrid items={ender} slots={enderSlots} cols={9} label="Ender Chest" />
+          </div>
+        )}
       </div>
-      {ender.length > 0 && (
-        <InventoryGrid items={ender} slots={enderSlots} cols={9} label="Ender Chest" />
-      )}
     </div>
   );
 }
 
-function ActionMenu({
-  name,
-  online,
-  onDone,
-}: {
-  name: string;
-  online: boolean;
-  onDone: () => void;
-}) {
+function ActionMenu({ name, online, onDone }: { name: string; online: boolean; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -221,12 +239,8 @@ function ActionMenu({
     });
     const d = await r.json();
     setBusy(false);
-    if (r.ok) {
-      setMsg(d.output || "Done ✓");
-      onDone();
-    } else {
-      setMsg(d.error || "Failed");
-    }
+    if (r.ok) { setMsg(d.output || "Done"); onDone(); }
+    else setMsg(d.error || "Failed");
   }
 
   async function kick() {
@@ -240,54 +254,66 @@ function ActionMenu({
     await act("ban", reason || undefined);
   }
 
+  const items = [
+    ...(online ? [
+      { label: "Kick", onClick: () => { setOpen(false); kick(); } },
+      { label: "Survival", onClick: () => { setOpen(false); act("gamemode", "survival"); } },
+      { label: "Creative", onClick: () => { setOpen(false); act("gamemode", "creative"); } },
+      { label: "Spectator", onClick: () => { setOpen(false); act("gamemode", "spectator"); } },
+    ] : []),
+    { label: "Op", onClick: () => { setOpen(false); act("op"); } },
+    { label: "Deop", onClick: () => { setOpen(false); act("deop"); } },
+    { label: "Ban", danger: true, onClick: () => { setOpen(false); ban(); } },
+    { label: "Pardon", onClick: () => { setOpen(false); act("pardon"); } },
+  ];
+
   return (
-    <div style={{ position: "relative" }}>
+    <div style={{ position: "relative", flexShrink: 0 }}>
       <button
         className="btn-ghost"
-        style={{ padding: "6px 12px", fontSize: 13 }}
+        style={{ padding: "7px 10px" }}
         onClick={() => setOpen((o) => !o)}
         disabled={busy}
       >
-        Actions ▾
+        <MoreVertical size={15} />
       </button>
       {open && (
         <div
           style={{
-            position: "absolute",
-            right: 0,
-            top: "calc(100% + 6px)",
-            background: "var(--bg-elev)",
-            border: "1px solid var(--border)",
+            position: "absolute", right: 0, top: "calc(100% + 6px)",
+            background: "var(--bg-elev2)",
+            border: "1px solid var(--border-bright)",
             borderRadius: "var(--radius)",
             minWidth: 160,
             zIndex: 100,
-            boxShadow: "0 4px 20px rgba(0,0,0,.4)",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
             overflow: "hidden",
           }}
           onMouseLeave={() => setOpen(false)}
         >
-          {online && (
-            <>
-              <ActionItem label="Kick" onClick={() => { setOpen(false); kick(); }} />
-              <ActionItem label="Set Survival" onClick={() => { setOpen(false); act("gamemode", "survival"); }} />
-              <ActionItem label="Set Creative" onClick={() => { setOpen(false); act("gamemode", "creative"); }} />
-              <ActionItem label="Set Spectator" onClick={() => { setOpen(false); act("gamemode", "spectator"); }} />
-            </>
-          )}
-          <ActionItem label="Op" onClick={() => { setOpen(false); act("op"); }} />
-          <ActionItem label="Deop" onClick={() => { setOpen(false); act("deop"); }} />
-          <ActionItem label="Ban" danger onClick={() => { setOpen(false); ban(); }} />
-          <ActionItem label="Pardon" onClick={() => { setOpen(false); act("pardon"); }} />
+          {items.map((item, i) => (
+            <button
+              key={i}
+              onClick={item.onClick}
+              style={{
+                display: "flex", width: "100%", textAlign: "left",
+                background: "none", border: "none", borderRadius: 0,
+                padding: "10px 16px",
+                color: (item as any).danger ? "var(--danger)" : "var(--text-mid)",
+                fontSize: 13, fontWeight: 500, cursor: "pointer",
+                transition: "all 0.1s",
+                borderBottom: i < items.length - 1 ? "1px solid var(--border)" : "none",
+              }}
+              onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--bg-elev3)"; (e.target as HTMLElement).style.color = (item as any).danger ? "var(--danger)" : "var(--text)"; }}
+              onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "none"; (e.target as HTMLElement).style.color = (item as any).danger ? "var(--danger)" : "var(--text-mid)"; }}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
       )}
       {msg && (
-        <div
-          style={{
-            marginTop: 4,
-            fontSize: 12,
-            color: msg.includes("✓") || msg.includes("Done") ? "var(--accent)" : "var(--danger)",
-          }}
-        >
+        <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", fontSize: 12, color: "var(--accent)", whiteSpace: "nowrap", background: "var(--bg-elev2)", padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)" }}>
           {msg}
         </div>
       )}
@@ -295,39 +321,12 @@ function ActionMenu({
   );
 }
 
-function ActionItem({
-  label,
-  onClick,
-  danger,
-}: {
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-}) {
+function StatPill({ icon, value, color }: { icon: React.ReactNode; value: string; color: string }) {
   return (
-    <button
-      onClick={onClick}
-      style={{
-        display: "block",
-        width: "100%",
-        textAlign: "left",
-        background: "none",
-        border: "none",
-        borderRadius: 0,
-        padding: "10px 16px",
-        color: danger ? "var(--danger)" : "var(--text)",
-        fontSize: 13,
-        cursor: "pointer",
-      }}
-      onMouseEnter={(e) =>
-        ((e.target as HTMLElement).style.background = "var(--bg-elev2)")
-      }
-      onMouseLeave={(e) =>
-        ((e.target as HTMLElement).style.background = "none")
-      }
-    >
-      {label}
-    </button>
+    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, color: "var(--text-dim)" }}>
+      <span style={{ color }}>{icon}</span>
+      <span style={{ fontWeight: 600, color: "var(--text-mid)" }}>{value}</span>
+    </div>
   );
 }
 
@@ -351,100 +350,118 @@ export default function PlayersPage() {
     return () => clearInterval(id);
   }, [refresh]);
 
+  const onlineCount = players.filter((p) => p.online).length;
+
   return (
-    <>
-      <div className="page-title">Players</div>
-      <div className="page-sub">
-        {players.filter((p) => p.online).length} online · {players.length} total · click to expand inventory &amp; stats
+    <div className="animate-in">
+      <div className="page-header">
+        <h1 className="page-title">Players</h1>
+        <p className="page-sub" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ color: "var(--accent)", fontWeight: 700 }}>{onlineCount}</span> online
+          <span style={{ color: "var(--border-bright)" }}>·</span>
+          {players.length} total
+          <span style={{ color: "var(--border-bright)" }}>·</span>
+          click to expand inventory
+        </p>
       </div>
 
-      {loading && <div style={{ color: "var(--text-dim)" }}>Loading…</div>}
-      {!loading && players.length === 0 && (
-        <div className="card" style={{ color: "var(--text-dim)" }}>
-          No player data yet. Players appear here after they join the world once.
+      {loading && (
+        <div style={{ color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 8 }}>
+          <Loader2 size={15} style={{ animation: "spin 0.8s linear infinite" }} />
+          Loading players…
         </div>
       )}
 
-      <div className="grid" style={{ gap: 12 }}>
-        {players.map((p) => (
-          <div key={p.uuid} className="card">
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 14,
-              }}
-            >
+      {!loading && players.length === 0 && (
+        <div className="card" style={{ textAlign: "center", padding: "40px 20px" }}>
+          <Users size={36} style={{ color: "var(--text-dim)", margin: "0 auto 12px" }} />
+          <div style={{ color: "var(--text-mid)", fontWeight: 600, fontSize: 15 }}>No players yet</div>
+          <div style={{ color: "var(--text-dim)", fontSize: 13, marginTop: 4 }}>Players appear here after they join the world once.</div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {players.map((p) => {
+          const isOpen = open === p.uuid;
+          return (
+            <div key={p.uuid} className="card" style={{ padding: 0, overflow: "visible" }}>
+              {/* Header row */}
               <div
-                style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, cursor: "pointer" }}
-                onClick={() => setOpen(open === p.uuid ? null : p.uuid)}
+                style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 18px", cursor: "pointer" }}
+                onClick={() => setOpen(isOpen ? null : p.uuid)}
               >
-                {p.avatar && (
+                {p.avatar ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={p.avatar}
                     alt={p.name}
-                    width={42}
-                    height={42}
-                    style={{ borderRadius: 6, imageRendering: "pixelated" }}
+                    width={44}
+                    height={44}
+                    style={{ borderRadius: 8, imageRendering: "pixelated", flexShrink: 0, border: "2px solid var(--border)" }}
                   />
+                ) : (
+                  <div style={{ width: 44, height: 44, borderRadius: 8, background: "var(--bg-elev2)", border: "2px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Users size={18} color="var(--text-dim)" />
+                  </div>
                 )}
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{p.name}</div>
-                  <div style={{ color: "var(--text-dim)", fontSize: 12.5 }}>
-                    {p.health != null && `❤ ${p.health}  `}
-                    {p.foodLevel != null && `🍖 ${p.foodLevel}  `}
-                    {p.xpLevel != null && `✦ lvl ${p.xpLevel}  `}
-                    {p.inventoryCount > 0 && `🎒 ${p.inventoryCount} items`}
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: "-0.2px" }}>{p.name}</span>
+                    <span className={`badge ${p.online ? "badge-online" : "badge-offline"}`}>
+                      <span className="dot" />
+                      {p.online ? "Online" : "Offline"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: 14, marginTop: 6, flexWrap: "wrap" }}>
+                    {p.health != null && <StatPill icon={<Heart size={12} />} value={`${p.health} HP`} color="var(--danger)" />}
+                    {p.foodLevel != null && <StatPill icon={<Utensils size={12} />} value={`${p.foodLevel}`} color="var(--warn)" />}
+                    {p.xpLevel != null && <StatPill icon={<Star size={12} />} value={`Lvl ${p.xpLevel}`} color="var(--accent)" />}
+                    {p.position && (
+                      <StatPill
+                        icon={<MapPin size={12} />}
+                        value={`${p.position.x}, ${p.position.y}, ${p.position.z} (${dimName(p.position.dimension)})`}
+                        color="var(--blue)"
+                      />
+                    )}
+                    {p.lastModified && (
+                      <StatPill
+                        icon={<Clock size={12} />}
+                        value={new Date(p.lastModified).toLocaleDateString()}
+                        color="var(--text-dim)"
+                      />
+                    )}
                   </div>
                 </div>
-                <span
-                  className={`badge ${p.online ? "badge-online" : "badge-offline"}`}
-                >
-                  <span className="dot" />
-                  {p.online ? "Online" : "Offline"}
-                </span>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }} onClick={(e) => e.stopPropagation()}>
+                  <ActionMenu name={p.name} online={p.online} onDone={refresh} />
+                  <div style={{ color: "var(--text-dim)" }}>
+                    {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </div>
+                </div>
               </div>
-              <ActionMenu name={p.name} online={p.online} onDone={refresh} />
-            </div>
 
-            <div style={{ marginTop: 12, display: "flex", gap: 24, flexWrap: "wrap" }}>
-              {p.position && (
-                <div className="stat">
-                  <span className="label">Location</span>
-                  <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>
-                    {p.position.x}, {p.position.y}, {p.position.z}{" "}
-                    <span style={{ color: "var(--text-dim)" }}>
-                      ({dimName(p.position.dimension)})
-                    </span>
-                  </span>
-                </div>
-              )}
-              {p.death && (
-                <div className="stat">
-                  <span className="label">Last Death</span>
-                  <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>
-                    {p.death.x}, {p.death.y}, {p.death.z}{" "}
-                    <span style={{ color: "var(--text-dim)" }}>
-                      ({dimName(p.death.dimension)})
-                    </span>
-                  </span>
-                </div>
-              )}
-              {p.lastModified && (
-                <div className="stat">
-                  <span className="label">Last Seen</span>
-                  <span style={{ fontSize: 13 }}>
-                    {new Date(p.lastModified).toLocaleDateString()}
-                  </span>
+              {/* Expanded inventory */}
+              {isOpen && (
+                <div style={{ padding: "0 18px 18px" }}>
+                  {p.death && (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--danger-glow)", borderRadius: 8, padding: "5px 12px", fontSize: 12, color: "var(--danger)", marginBottom: 4 }}>
+                      <Skull size={12} />
+                      Last death: {p.death.x}, {p.death.y}, {p.death.z} ({dimName(p.death.dimension)})
+                    </div>
+                  )}
+                  <InventoryPanel uuid={p.uuid} />
                 </div>
               )}
             </div>
-
-            {open === p.uuid && <InventoryPanel uuid={p.uuid} />}
-          </div>
-        ))}
+          );
+        })}
       </div>
-    </>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
   );
 }

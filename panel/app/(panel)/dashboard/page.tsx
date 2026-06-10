@@ -1,6 +1,20 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import {
+  Play,
+  Square,
+  RotateCw,
+  Users,
+  Clock,
+  MemoryStick,
+  Cpu,
+  Loader2,
+  Wifi,
+  WifiOff,
+  Copy,
+  Check,
+} from "lucide-react";
 
 interface Status {
   state: "online" | "offline" | "starting" | "unknown";
@@ -28,17 +42,57 @@ function fmtUptime(s: number | null): string {
 
 function StatusBadge({ state }: { state: Status["state"] }) {
   const map = {
-    online: ["badge-online", "Online"],
-    starting: ["badge-starting", "Starting…"],
-    offline: ["badge-offline", "Offline"],
-    unknown: ["badge-offline", "Unknown"],
-  } as const;
-  const [cls, label] = map[state];
+    online: { cls: "badge-online", label: "Online" },
+    starting: { cls: "badge-starting", label: "Starting…" },
+    offline: { cls: "badge-offline", label: "Offline" },
+    unknown: { cls: "badge-offline", label: "Unknown" },
+  };
+  const { cls, label } = map[state];
   return (
-    <span className={`badge ${cls}`}>
+    <span className={`badge ${cls}`} style={{ fontSize: 13, padding: "5px 12px" }}>
       <span className="dot" />
       {label}
     </span>
+  );
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  sub,
+  accent,
+  progress,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  sub?: string;
+  accent: string;
+  progress?: number;
+}) {
+  return (
+    <div className="stat-card animate-in">
+      <div className="stat-icon" style={{ background: accent + "22" }}>
+        <div style={{ color: accent }}>{icon}</div>
+      </div>
+      <div className="stat-label">{label}</div>
+      <div className="stat-value">{value}</div>
+      {sub && (
+        <div style={{ color: "var(--text-dim)", fontSize: 12, marginTop: 4 }}>{sub}</div>
+      )}
+      {progress != null && (
+        <div className="progress-bar" style={{ marginTop: 10 }}>
+          <div
+            className="progress-fill"
+            style={{
+              width: `${Math.min(100, progress)}%`,
+              background: progress > 80 ? "var(--danger)" : progress > 60 ? "var(--warn)" : accent,
+            }}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -47,6 +101,7 @@ export default function Dashboard() {
   const [players, setPlayers] = useState<PlayersInfo | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -59,9 +114,7 @@ export default function Dashboard() {
       } else {
         setPlayers(null);
       }
-    } catch {
-      /* ignore poll errors */
-    }
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -85,98 +138,154 @@ export default function Dashboard() {
     }
   }
 
+  async function copyAddress() {
+    if (!status?.serverAddress) return;
+    await navigator.clipboard.writeText(status.serverAddress);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   const state = status?.state ?? "unknown";
   const canStart = state === "offline" || state === "unknown";
   const canStop = state === "online" || state === "starting";
   const canRestart = state === "online" || state === "starting";
+  const memPct = status?.memUsageMB && status?.memLimitMB
+    ? (status.memUsageMB / status.memLimitMB) * 100
+    : null;
 
   return (
-    <>
-      <div className="page-title">Dashboard</div>
-      <div className="page-sub">Control your Minecraft server</div>
+    <div className="animate-in">
+      <div className="page-header">
+        <h1 className="page-title">Dashboard</h1>
+        <p className="page-sub">Monitor and control your Minecraft server</p>
+      </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 16,
-          }}
-        >
-          <div>
+      {/* Server Control Card */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 16,
+        }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <StatusBadge state={state} />
-            <div
+            <button
+              onClick={copyAddress}
               style={{
-                marginTop: 12,
+                background: "none",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-sm)",
+                padding: "7px 12px",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                cursor: "pointer",
                 color: "var(--text-dim)",
                 fontFamily: "var(--mono)",
+                fontSize: 13,
+                transition: "all var(--transition)",
+                width: "fit-content",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = "var(--border-bright)";
+                (e.currentTarget as HTMLElement).style.color = "var(--text)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
+                (e.currentTarget as HTMLElement).style.color = "var(--text-dim)";
               }}
             >
+              {state === "online" ? (
+                <Wifi size={13} style={{ color: "var(--accent)" }} />
+              ) : (
+                <WifiOff size={13} />
+              )}
               {status?.serverAddress || "…"}
-            </div>
+              {copied ? <Check size={12} style={{ color: "var(--accent)" }} /> : <Copy size={12} />}
+            </button>
           </div>
-          <div className="row">
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               className="btn-primary"
               disabled={busy || !canStart}
               onClick={() => action("start")}
             >
-              ▶ Start
+              {busy ? <Loader2 size={15} style={{ animation: "spin 0.8s linear infinite" }} /> : <Play size={15} />}
+              Start
             </button>
             <button
               className="btn-ghost"
               disabled={busy || !canRestart}
               onClick={() => action("restart")}
             >
-              ↺ Restart
+              <RotateCw size={15} />
+              Restart
             </button>
             <button
               className="btn-danger"
               disabled={busy || !canStop}
               onClick={() => action("stop")}
             >
-              ■ Stop
+              <Square size={15} />
+              Stop
             </button>
           </div>
         </div>
-        {msg && <div className="error-text">{msg}</div>}
+        {msg && (
+          <div style={{ marginTop: 12, fontSize: 13, color: "var(--danger)", display: "flex", alignItems: "center", gap: 6 }}>
+            {msg}
+          </div>
+        )}
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
-        <div className="card stat">
-          <span className="label">Players</span>
-          <span className="value">
-            {players ? `${players.online}/${players.max}` : "—"}
-          </span>
-        </div>
-        <div className="card stat">
-          <span className="label">Uptime</span>
-          <span className="value">{fmtUptime(status?.uptimeSeconds ?? null)}</span>
-        </div>
-        <div className="card stat">
-          <span className="label">Memory</span>
-          <span className="value">
-            {status?.memUsageMB != null ? `${(status.memUsageMB / 1024).toFixed(1)}G` : "—"}
-          </span>
-        </div>
-        <div className="card stat">
-          <span className="label">CPU</span>
-          <span className="value">
-            {status?.cpuPercent != null ? `${status.cpuPercent}%` : "—"}
-          </span>
-        </div>
+      {/* Stat Grid */}
+      <div className="grid stat-grid-4" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 20 }}>
+        <StatCard
+          icon={<Users size={18} />}
+          label="Players"
+          value={players ? `${players.online}/${players.max}` : "—"}
+          sub={players?.online ? `${players.online} online` : "No players"}
+          accent="var(--accent)"
+          progress={players ? (players.online / Math.max(players.max, 1)) * 100 : undefined}
+        />
+        <StatCard
+          icon={<Clock size={18} />}
+          label="Uptime"
+          value={fmtUptime(status?.uptimeSeconds ?? null)}
+          sub={status?.state === "online" ? "Running" : "Stopped"}
+          accent="var(--blue)"
+        />
+        <StatCard
+          icon={<MemoryStick size={18} />}
+          label="Memory"
+          value={status?.memUsageMB != null ? `${(status.memUsageMB / 1024).toFixed(1)} GB` : "—"}
+          sub={status?.memLimitMB ? `of ${(status.memLimitMB / 1024).toFixed(0)} GB` : undefined}
+          accent="var(--purple)"
+          progress={memPct ?? undefined}
+        />
+        <StatCard
+          icon={<Cpu size={18} />}
+          label="CPU"
+          value={status?.cpuPercent != null ? `${status.cpuPercent}%` : "—"}
+          sub="Server load"
+          accent="var(--warn)"
+          progress={status?.cpuPercent ?? undefined}
+        />
       </div>
 
+      {/* Online Players */}
       {players && players.names.length > 0 && (
-        <div className="card" style={{ marginTop: 16 }}>
-          <div className="stat label" style={{ marginBottom: 10 }}>
+        <div className="card animate-in">
+          <div className="section-title">
+            <Users size={14} />
             Online now
           </div>
           <div className="row">
             {players.names.map((n) => (
-              <span key={n} className="badge badge-online">
+              <span key={n} className="badge badge-online" style={{ fontSize: 13, padding: "5px 12px" }}>
                 <span className="dot" />
                 {n}
               </span>
@@ -184,6 +293,10 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-    </>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { ShieldCheck, UserPlus, Trash2, Users, Check, AlertCircle, Loader2 } from "lucide-react";
 
 interface Entry {
   uuid: string;
@@ -13,6 +14,7 @@ export default function WhitelistPage() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [msgOk, setMsgOk] = useState(true);
   const [serverAddress, setServerAddress] = useState("");
 
   const refresh = useCallback(async () => {
@@ -22,9 +24,7 @@ export default function WhitelistPage() {
     if (s.ok) setServerAddress((await s.json()).serverAddress);
   }, []);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useEffect(() => { refresh(); }, [refresh]);
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -37,9 +37,10 @@ export default function WhitelistPage() {
     });
     const d = await r.json();
     setBusy(false);
+    setMsgOk(r.ok);
     if (r.ok) {
       setName("");
-      setMsg(`Added ${name.trim()} ✓`);
+      setMsg(`Added ${name.trim()} to whitelist`);
       refresh();
     } else {
       setMsg(d.error || "Failed to add");
@@ -54,94 +55,118 @@ export default function WhitelistPage() {
       body: JSON.stringify({ name: n }),
     });
     if (r.ok) refresh();
-    else setMsg((await r.json()).error || "Failed to remove");
+    else { setMsgOk(false); setMsg((await r.json()).error || "Failed to remove"); }
   }
 
   return (
-    <>
-      <div className="page-title">Whitelist · Invite Friends</div>
-      <div className="page-sub">
-        Only whitelisted players can join. Share your server address with them.
+    <div className="animate-in">
+      <div className="page-header">
+        <h1 className="page-title">Whitelist</h1>
+        <p className="page-sub">Only whitelisted players can join your server</p>
       </div>
 
+      {/* Server address */}
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="stat label" style={{ marginBottom: 6 }}>
-          Server address
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <ShieldCheck size={15} color="var(--accent)" />
+          <div style={{ fontSize: 11.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-dim)" }}>
+            Server Address
+          </div>
         </div>
-        <div style={{ fontFamily: "var(--mono)", fontSize: 16, fontWeight: 700 }}>
-          {serverAddress || "…"}
+        <div style={{ fontFamily: "var(--mono)", fontSize: 16, fontWeight: 700, color: "var(--accent)" }}>
+          {serverAddress || "—"}
         </div>
         <div style={{ color: "var(--text-dim)", fontSize: 12.5, marginTop: 6 }}>
-          Friends add this in Minecraft → Multiplayer → Add Server.
+          Share in Minecraft → Multiplayer → Add Server
         </div>
       </div>
 
+      {/* Add player */}
       <form onSubmit={add} className="card" style={{ marginBottom: 16 }}>
-        <div className="stat label" style={{ marginBottom: 8 }}>
-          Add a friend by Minecraft username
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--accent-dim)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <UserPlus size={16} color="var(--accent)" />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14.5 }}>Add Friend</div>
+            <div style={{ color: "var(--text-dim)", fontSize: 12.5 }}>Enter their exact Minecraft username</div>
+          </div>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <input
-            placeholder="e.g. Notch"
+            placeholder="e.g. Notch, Steve, Alex…"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <button className="btn-primary" disabled={busy || !name.trim()}>
+          <button className="btn-primary" disabled={busy || !name.trim()} style={{ flexShrink: 0 }}>
+            {busy ? <Loader2 size={15} style={{ animation: "spin 0.8s linear infinite" }} /> : <UserPlus size={15} />}
             {busy ? "Adding…" : "Add"}
           </button>
         </div>
         {msg && (
-          <div
-            style={{
-              marginTop: 8,
-              fontSize: 13,
-              color: msg.includes("✓") ? "var(--accent)" : "var(--danger)",
-            }}
-          >
+          <div style={{ marginTop: 10, fontSize: 13, color: msgOk ? "var(--accent)" : "var(--danger)", display: "flex", alignItems: "center", gap: 6 }}>
+            {msgOk ? <Check size={13} /> : <AlertCircle size={13} />}
             {msg}
           </div>
         )}
         <div style={{ color: "var(--text-dim)", fontSize: 12, marginTop: 8 }}>
-          Note: server must be online to update the whitelist.
+          Server must be online to update the whitelist via RCON.
         </div>
       </form>
 
+      {/* List */}
       <div className="card">
-        <div className="stat label" style={{ marginBottom: 12 }}>
-          Whitelisted ({entries.length})
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+          <Users size={15} color="var(--text-dim)" />
+          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-mid)" }}>
+            Whitelisted Players
+          </span>
+          <span className="chip" style={{ marginLeft: 4 }}>{entries.length}</span>
         </div>
+
         {entries.length === 0 ? (
-          <div style={{ color: "var(--text-dim)" }}>Nobody whitelisted yet.</div>
+          <div style={{ textAlign: "center", padding: "24px 0", color: "var(--text-dim)", fontSize: 13 }}>
+            <ShieldCheck size={28} style={{ margin: "0 auto 10px", display: "block", opacity: 0.4 }} />
+            No players whitelisted yet.
+          </div>
         ) : (
-          <div className="grid" style={{ gap: 8 }}>
-            {entries.map((e) => (
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {entries.map((e, i) => (
               <div
                 key={e.uuid}
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: 12,
-                  padding: "8px 4px",
-                  borderBottom: "1px solid var(--border)",
+                  padding: "11px 0",
+                  borderBottom: i < entries.length - 1 ? "1px solid var(--border)" : "none",
                 }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={e.avatar}
                   alt={e.name}
-                  width={32}
-                  height={32}
-                  style={{ borderRadius: 5, imageRendering: "pixelated" }}
+                  width={36}
+                  height={36}
+                  style={{ borderRadius: 7, imageRendering: "pixelated", border: "1px solid var(--border)" }}
                 />
-                <span style={{ flex: 1, fontWeight: 600 }}>{e.name}</span>
-                <button className="btn-ghost" onClick={() => remove(e.name)}>
-                  Remove
+                <span style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{e.name}</span>
+                <button
+                  className="btn-icon"
+                  onClick={() => remove(e.name)}
+                  title={`Remove ${e.name}`}
+                >
+                  <Trash2 size={13} />
                 </button>
               </div>
             ))}
           </div>
         )}
       </div>
-    </>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
   );
 }
