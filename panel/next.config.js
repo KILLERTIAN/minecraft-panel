@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
+  // Type-checking runs locally before commits; in-container tsc OOM-kills
+  // the 8GB VPS during Coolify builds (no swap), so skip it here.
+  typescript: { ignoreBuildErrors: true },
+  eslint: { ignoreDuringBuilds: true },
   experimental: {
     serverActions: { bodySizeLimit: "2gb" },
     proxyClientMaxBodySize: 4 * 1024 * 1024 * 1024, // 4GB
