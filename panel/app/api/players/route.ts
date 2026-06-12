@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { listPlayers, getLivePosition } from "@/lib/rcon";
-import { listPlayerUuids, readPlayerData, PlayerData } from "@/lib/nbt-reader";
+import {
+  listPlayerUuids,
+  readPlayerData,
+  readPlayerStats,
+  PlayerData,
+} from "@/lib/nbt-reader";
 import { getName, avatarUrl } from "@/lib/mojang";
 import { listPlayerSnapshots, upsertPlayerSnapshot } from "@/lib/db";
 
@@ -37,6 +42,7 @@ export async function GET() {
         } catch {}
       }
 
+      const stats = await readPlayerStats(uuid);
       const name = (await getName(uuid)) || snap?.name || null;
       const displayName = name || uuid.slice(0, 8);
       const isOnline = name ? onlineSet.has(name.toLowerCase()) : false;
@@ -75,6 +81,7 @@ export async function GET() {
         inventoryCount: data?.inventory.length ?? 0,
         lastModified: lastSeen,
         stored: fromSnapshot,
+        stats,
       };
     })
   );
@@ -98,6 +105,7 @@ export async function GET() {
       inventoryCount: 0,
       lastModified: new Date().toISOString(),
       stored: false,
+      stats: null,
     });
   }
 

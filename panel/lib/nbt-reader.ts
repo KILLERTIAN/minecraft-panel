@@ -229,6 +229,38 @@ export async function readPlayerData(uuid: string): Promise<PlayerData | null> {
   }
 }
 
+export interface PlayerStats {
+  playTimeTicks: number | null;
+  deaths: number;
+  mobKills: number;
+  playerKills: number;
+  damageDealt: number;
+  damageTaken: number;
+}
+
+// Server-maintained stats live in world/stats/<uuid>.json — no external API
+// needed. play_time is in ticks (20/s); pre-1.17 the key was play_one_minute.
+export async function readPlayerStats(uuid: string): Promise<PlayerStats | null> {
+  try {
+    const raw = await fs.readFile(
+      path.join(worldDir(), "stats", `${uuid}.json`),
+      "utf8"
+    );
+    const custom = JSON.parse(raw)?.stats?.["minecraft:custom"] || {};
+    return {
+      playTimeTicks:
+        custom["minecraft:play_time"] ?? custom["minecraft:play_one_minute"] ?? null,
+      deaths: custom["minecraft:deaths"] ?? 0,
+      mobKills: custom["minecraft:mob_kills"] ?? 0,
+      playerKills: custom["minecraft:player_kills"] ?? 0,
+      damageDealt: custom["minecraft:damage_dealt"] ?? 0,
+      damageTaken: custom["minecraft:damage_taken"] ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export interface WorldInfo {
   name: string;
   seed: string | null;

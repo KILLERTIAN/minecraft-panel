@@ -4,8 +4,17 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Users, Heart, Utensils, Star, MapPin, Skull,
   Clock, ChevronDown, ChevronUp, MoreVertical, Loader2, Copy, Check,
+  Timer, Swords,
 } from "lucide-react";
 
+interface PlayerStats {
+  playTimeTicks: number | null;
+  deaths: number;
+  mobKills: number;
+  playerKills: number;
+  damageDealt: number;
+  damageTaken: number;
+}
 interface Player {
   uuid: string;
   name: string;
@@ -18,6 +27,14 @@ interface Player {
   death: { x: number; y: number; z: number; dimension: string } | null;
   inventoryCount: number;
   lastModified: string | null;
+  stats: PlayerStats | null;
+}
+
+function fmtPlaytime(ticks: number): string {
+  const mins = Math.floor(ticks / 20 / 60);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 interface Enchant {
   id: string;
@@ -617,6 +634,27 @@ export default function PlayersPage() {
                         icon={<MapPin size={12} />}
                         value={`${p.position.x}, ${p.position.y}, ${p.position.z} (${dimName(p.position.dimension)})`}
                         color="var(--blue)"
+                      />
+                    )}
+                    {p.stats?.playTimeTicks != null && (
+                      <StatPill
+                        icon={<Timer size={12} />}
+                        value={fmtPlaytime(p.stats.playTimeTicks)}
+                        color="var(--purple)"
+                      />
+                    )}
+                    {p.stats && (
+                      <StatPill
+                        icon={<Skull size={12} />}
+                        value={`${p.stats.deaths} deaths`}
+                        color="var(--text-dim)"
+                      />
+                    )}
+                    {p.stats && (
+                      <StatPill
+                        icon={<Swords size={12} />}
+                        value={`${p.stats.mobKills + p.stats.playerKills} kills`}
+                        color="var(--warn)"
                       />
                     )}
                     {p.lastModified && (
