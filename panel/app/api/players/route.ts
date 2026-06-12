@@ -79,6 +79,28 @@ export async function GET() {
     })
   );
 
+  // RCON may report players the panel has no data for yet (playerdata flushes
+  // on autosave). Show them anyway so "online" never undercounts.
+  const knownNames = new Set(players.map((p) => p.name.toLowerCase()));
+  for (const n of online.names) {
+    if (knownNames.has(n.toLowerCase())) continue;
+    const live = await getLivePosition(n).catch(() => null);
+    players.push({
+      uuid: `online:${n}`,
+      name: n,
+      avatar: avatarUrl(n),
+      online: true,
+      health: null,
+      foodLevel: null,
+      xpLevel: null,
+      position: live,
+      death: null,
+      inventoryCount: 0,
+      lastModified: new Date().toISOString(),
+      stored: false,
+    });
+  }
+
   // Online first, then most recently seen.
   players.sort((a, b) => {
     if (a.online !== b.online) return a.online ? -1 : 1;

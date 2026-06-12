@@ -1,7 +1,29 @@
-// Username <-> UUID via Mojang API. Cached in memory (process lifetime).
+// Username <-> UUID. Tries the server's usercache.json first (works for
+// offline-mode servers whose UUIDs don't exist on Mojang), then Mojang API.
+// Cached in memory (process lifetime).
+
+import fs from "fs";
+import path from "path";
+import { config } from "./config";
 
 const nameToUuid = new Map<string, string>();
 const uuidToName = new Map<string, string>();
+
+let ucCache: { at: number; byUuid: Map<string, string> } | null = null;
+function usercache(): Map<string, string> {
+  if (ucCache && Date.now() - ucCache.at < 30_000) return ucCache.byUuid;
+  const byUuid = new Map<string, string>();
+  try {
+    const raw = fs.readFileSync(path.join(config.mcDataPath, "usercache.json"), "utf8");
+    for (const e of JSON.parse(raw)) {
+      if (e?.uuid && e?.name) {
+        byUuid.set(String(e.uuid).replace(/-/g, "").toLowerCase(), e.name);
+      }
+    }
+  } catch {}
+  ucCache = { at: Date.now(), byUuid };
+  return byUuid;
+}
 
 function dashUuid(raw: string): string {
   // 32-char hex -> 8-4-4-4-12
@@ -34,6 +56,11 @@ export async function getUuid(name: string): Promise<string | null> {
 export async function getName(uuid: string): Promise<string | null> {
   const bare = uuid.replace(/-/g, "");
   if (uuidToName.has(bare)) return uuidToName.get(bare)!;
+  const local = usercache().get(bare.toLowerCase());
+  if (local) {
+    uuidToName.set(bare, local);
+    return local;
+  }
   try {
     const r = await fetch(
       `https://sessionserver.mojang.com/session/minecraft/profile/${bare}`
