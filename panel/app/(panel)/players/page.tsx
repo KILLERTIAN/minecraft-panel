@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Users, Heart, Utensils, Star, MapPin, Skull,
-  Clock, ChevronDown, ChevronUp, MoreVertical, Loader2,
+  Clock, ChevronDown, ChevronUp, MoreVertical, Loader2, Copy, Check,
 } from "lucide-react";
 
 interface Player {
@@ -19,10 +19,19 @@ interface Player {
   inventoryCount: number;
   lastModified: string | null;
 }
+interface Enchant {
+  id: string;
+  lvl: number;
+}
 interface InvItem {
   slot: number;
   id: string;
   count: number;
+  name?: string | null;
+  enchants?: Enchant[];
+  damage?: number | null;
+  maxDamage?: number | null;
+  potion?: string | null;
 }
 
 function dimName(d: string): string {
@@ -30,6 +39,61 @@ function dimName(d: string): string {
 }
 function itemName(id: string): string {
   return id.replace("minecraft:", "").replace(/_/g, " ");
+}
+function titleCase(s: string): string {
+  return s.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+function roman(n: number): string {
+  const r = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+  return r[n] || String(n);
+}
+// Enchants capped at level I show no numeral in-game.
+const SINGLE_LEVEL_ENCHANTS = new Set([
+  "mending", "silk_touch", "infinity", "flame", "multishot", "channeling",
+  "aqua_affinity", "binding_curse", "vanishing_curse",
+]);
+function enchantLabel(e: Enchant): string {
+  const key = e.id.replace("minecraft:", "");
+  const name = titleCase(key.replace(/_/g, " "));
+  return SINGLE_LEVEL_ENCHANTS.has(key) ? name : `${name} ${roman(e.lvl)}`;
+}
+function isCurse(e: Enchant): boolean {
+  return e.id.includes("curse") || e.id.includes("binding") || e.id.includes("vanishing");
+}
+
+// Aternos-style rendered item/block icons; falls back to emoji on 404.
+function iconUrl(id: string): string {
+  return `https://mc.nerothe.com/img/1.21.4/minecraft_${id.replace("minecraft:", "")}.png`;
+}
+
+// Max durability for common gear, so we can draw a durability bar even when
+// the NBT doesn't carry a max_damage component.
+const TOOL_BASE: Record<string, number> = { wooden: 59, stone: 131, iron: 250, golden: 32, diamond: 1561, netherite: 2031 };
+const ARMOR_BASE: Record<string, [number, number, number, number]> = {
+  // [helmet, chestplate, leggings, boots]
+  leather: [55, 80, 75, 65],
+  chainmail: [165, 240, 225, 195],
+  iron: [165, 240, 225, 195],
+  golden: [77, 112, 105, 91],
+  diamond: [363, 528, 495, 429],
+  netherite: [407, 592, 555, 481],
+};
+const MISC_DURABILITY: Record<string, number> = {
+  bow: 384, crossbow: 465, trident: 250, shield: 336, fishing_rod: 64,
+  flint_and_steel: 64, shears: 238, elytra: 432, mace: 500, carrot_on_a_stick: 25,
+  warped_fungus_on_a_stick: 100, brush: 64, turtle_helmet: 275,
+};
+function maxDurability(id: string): number | null {
+  const n = id.replace("minecraft:", "");
+  if (MISC_DURABILITY[n]) return MISC_DURABILITY[n];
+  const [mat, ...rest] = n.split("_");
+  const kind = rest.join("_");
+  if (TOOL_BASE[mat] && ["sword", "pickaxe", "axe", "shovel", "hoe"].includes(kind)) return TOOL_BASE[mat];
+  if (ARMOR_BASE[mat]) {
+    const idx = ["helmet", "chestplate", "leggings", "boots"].indexOf(kind);
+    if (idx >= 0) return ARMOR_BASE[mat][idx];
+  }
+  return null;
 }
 
 const SLOT_SIZE = 46;
@@ -47,53 +111,133 @@ const SLOT_STYLE: React.CSSProperties = {
   transition: "border-color 0.12s",
 };
 
+function ItemIcon({ item }: { item: InvItem }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <span style={{ fontSize: 22 }}>{itemEmoji(item.id)}</span>;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={iconUrl(item.id)}
+      alt={itemName(item.id)}
+      width={32}
+      height={32}
+      style={{ imageRendering: "pixelated", display: "block" }}
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function ItemTooltip({ item }: { item: InvItem }) {
+  const enchants = item.enchants || [];
+  const max = item.maxDamage ?? maxDurability(item.id);
+  const dmg = item.damage ?? 0;
+  const showDur = max != null && dmg > 0;
+  const durLeft = showDur ? max! - dmg : 0;
+  const durPct = showDur ? Math.max(0, Math.min(1, durLeft / max!)) : 0;
+  const durColor = durPct > 0.5 ? "#4ade80" : durPct > 0.25 ? "#facc15" : "#f87171";
+
+  return (
+    <div style={{
+      position: "absolute",
+      bottom: "calc(100% + 8px)",
+      left: "50%",
+      transform: "translateX(-50%)",
+      background: "rgba(16,8,24,0.96)",
+      border: "2px solid rgba(80,32,120,0.9)",
+      borderRadius: 4,
+      padding: "7px 11px",
+      fontSize: 12,
+      whiteSpace: "nowrap",
+      zIndex: 200,
+      pointerEvents: "none",
+      boxShadow: "0 6px 20px rgba(0,0,0,0.6)",
+      fontFamily: "var(--mono)",
+      lineHeight: 1.55,
+      textAlign: "left",
+    }}>
+      {/* Name: custom names italic aqua, enchanted items aqua, plain white */}
+      <div style={{
+        color: item.name ? "#55ffff" : enchants.length > 0 ? "#55ffff" : "#ffffff",
+        fontStyle: item.name ? "italic" : "normal",
+        fontWeight: 600,
+        textTransform: item.name ? "none" : "capitalize",
+      }}>
+        {item.name || itemName(item.id)}
+        {item.count > 1 && <span style={{ color: "#aaaaaa" }}> ×{item.count}</span>}
+      </div>
+      {item.name && (
+        <div style={{ color: "#555560", fontSize: 10.5, textTransform: "capitalize" }}>{itemName(item.id)}</div>
+      )}
+      {item.potion && (
+        <div style={{ color: "#ff55ff", textTransform: "capitalize" }}>
+          {itemName(item.potion)}
+        </div>
+      )}
+      {enchants.map((e) => (
+        <div key={e.id} style={{ color: isCurse(e) ? "#ff5555" : "#a8a8ff" }}>
+          {enchantLabel(e)}
+        </div>
+      ))}
+      {showDur && (
+        <div style={{ marginTop: 4 }}>
+          <div style={{ color: "#aaaaaa", fontSize: 10.5 }}>
+            Durability: {durLeft} / {max}
+          </div>
+          <div style={{ height: 4, background: "rgba(255,255,255,0.12)", borderRadius: 2, marginTop: 2 }}>
+            <div style={{ height: "100%", width: `${durPct * 100}%`, background: durColor, borderRadius: 2 }} />
+          </div>
+        </div>
+      )}
+      <div style={{ color: "#555560", fontSize: 10 }}>{item.id}</div>
+    </div>
+  );
+}
+
 function SlotCell({ item, title }: { item?: InvItem; title?: string }) {
   const [hovered, setHovered] = useState(false);
+  const enchanted = (item?.enchants?.length || 0) > 0;
+  const max = item ? (item.maxDamage ?? maxDurability(item.id)) : null;
+  const dmg = item?.damage ?? 0;
+  const showDur = max != null && dmg > 0;
+  const durPct = showDur ? Math.max(0, Math.min(1, (max! - dmg) / max!)) : 0;
+  const durColor = durPct > 0.5 ? "#4ade80" : durPct > 0.25 ? "#facc15" : "#f87171";
+
   return (
     <div
       style={{
         ...SLOT_STYLE,
-        borderColor: hovered && item ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.08)",
+        borderColor: hovered && item
+          ? "rgba(255,255,255,0.35)"
+          : enchanted
+            ? "rgba(167,139,250,0.45)"
+            : "rgba(255,255,255,0.08)",
+        background: enchanted ? "rgba(120,60,200,0.18)" : SLOT_STYLE.background,
         cursor: item ? "default" : undefined,
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      title={item ? `${itemName(item.id)} ×${item.count}` : title || ""}
+      title={!item ? title || "" : undefined}
     >
       {item ? (
         <>
-          <span style={{ fontSize: 22 }}>{itemEmoji(item.id)}</span>
+          <ItemIcon item={item} />
           {item.count > 1 && (
             <span style={{
               position: "absolute", bottom: 2, right: 4,
-              fontSize: 10, fontWeight: 700, color: "#fff",
+              fontSize: 11, fontWeight: 700, color: "#fff",
               textShadow: "1px 1px 0 #000",
+              fontFamily: "var(--mono)",
             }}>
               {item.count}
             </span>
           )}
-          {hovered && (
-            <div style={{
-              position: "absolute",
-              bottom: "calc(100% + 6px)",
-              left: "50%",
-              transform: "translateX(-50%)",
-              background: "var(--bg-elev3)",
-              border: "1px solid var(--border-bright)",
-              borderRadius: 8,
-              padding: "5px 10px",
-              fontSize: 11.5,
-              whiteSpace: "nowrap",
-              zIndex: 200,
-              color: "var(--text)",
-              pointerEvents: "none",
-              textTransform: "capitalize",
-              boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
-            }}>
-              {itemName(item.id)}
-              {item.count > 1 && <span style={{ color: "var(--accent)", marginLeft: 5 }}>×{item.count}</span>}
+          {showDur && (
+            <div style={{ position: "absolute", left: 4, right: 4, bottom: 3, height: 3, background: "rgba(0,0,0,0.6)", borderRadius: 1 }}>
+              <div style={{ height: "100%", width: `${durPct * 100}%`, background: durColor, borderRadius: 1 }} />
             </div>
           )}
+          {hovered && <ItemTooltip item={item} />}
         </>
       ) : null}
     </div>
@@ -321,6 +465,57 @@ function ActionMenu({ name, online, onDone }: { name: string; online: boolean; o
   );
 }
 
+interface Coords {
+  x: number;
+  y: number;
+  z: number;
+  dimension: string;
+}
+
+// Aternos-style location block: labeled X/Y/Z, dimension, copy-coords button.
+function LocationBlock({ icon, label, coords, accent }: {
+  icon: React.ReactNode;
+  label: string;
+  coords: Coords;
+  accent: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    navigator.clipboard?.writeText(`${coords.x} ${coords.y} ${coords.z}`).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+  return (
+    <div style={{
+      flex: "1 1 240px", minWidth: 240,
+      background: "var(--bg-elev2)", border: "1px solid var(--border)",
+      borderRadius: 10, padding: "12px 14px",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 700, color: accent, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          {icon}
+          {label}
+        </div>
+        <button className="btn-icon" onClick={copy} title="Copy coordinates" style={{ padding: 5 }}>
+          {copied ? <Check size={12} color="var(--accent)" /> : <Copy size={12} />}
+        </button>
+      </div>
+      <div style={{ display: "flex", gap: 18, fontFamily: "var(--mono)", fontSize: 14, fontWeight: 600 }}>
+        {(["x", "y", "z"] as const).map((axis) => (
+          <div key={axis}>
+            <span style={{ color: "var(--text-dim)", fontSize: 11, textTransform: "uppercase", marginRight: 5 }}>{axis}</span>
+            <span style={{ color: "var(--text)" }}>{coords[axis]}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 6, fontSize: 11.5, color: "var(--text-dim)", textTransform: "capitalize" }}>
+        {dimName(coords.dimension)}
+      </div>
+    </div>
+  );
+}
+
 function StatPill({ icon, value, color }: { icon: React.ReactNode; value: string; color: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, color: "var(--text-dim)" }}>
@@ -442,13 +637,27 @@ export default function PlayersPage() {
                 </div>
               </div>
 
-              {/* Expanded inventory */}
+              {/* Expanded: locations + inventory */}
               {isOpen && (
                 <div style={{ padding: "0 18px 18px" }}>
-                  {p.death && (
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--danger-glow)", borderRadius: 8, padding: "5px 12px", fontSize: 12, color: "var(--danger)", marginBottom: 4 }}>
-                      <Skull size={12} />
-                      Last death: {p.death.x}, {p.death.y}, {p.death.z} ({dimName(p.death.dimension)})
+                  {(p.position || p.death) && (
+                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
+                      {p.position && (
+                        <LocationBlock
+                          icon={<MapPin size={13} />}
+                          label={p.online ? "Current Position (live)" : "Last Position"}
+                          coords={p.position}
+                          accent="var(--blue)"
+                        />
+                      )}
+                      {p.death && (
+                        <LocationBlock
+                          icon={<Skull size={13} />}
+                          label="Last Death"
+                          coords={p.death}
+                          accent="var(--danger)"
+                        />
+                      )}
                     </div>
                   )}
                   <InventoryPanel uuid={p.uuid} />

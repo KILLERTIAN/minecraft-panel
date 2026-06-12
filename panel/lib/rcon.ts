@@ -87,6 +87,28 @@ export async function whitelistReload(): Promise<string> {
   return rconCommand("whitelist reload");
 }
 
+// Live position for an online player (playerdata files lag behind autosave).
+// "Alice has the following entity data: [43.06d, 68.0d, 3.57d]"
+export async function getLivePosition(
+  name: string
+): Promise<{ x: number; y: number; z: number; dimension: string } | null> {
+  const posRes = await rconCommand(`data get entity ${name} Pos`);
+  const m = posRes.match(/\[(-?[\d.]+)d?,\s*(-?[\d.]+)d?,\s*(-?[\d.]+)d?\]/);
+  if (!m) return null;
+  let dimension = "minecraft:overworld";
+  try {
+    const dimRes = await rconCommand(`data get entity ${name} Dimension`);
+    const dm = dimRes.match(/"([\w:]+)"/);
+    if (dm) dimension = dm[1];
+  } catch {}
+  return {
+    x: Math.round(parseFloat(m[1])),
+    y: Math.round(parseFloat(m[2])),
+    z: Math.round(parseFloat(m[3])),
+    dimension,
+  };
+}
+
 export async function saveOff(): Promise<void> {
   await rconCommand("save-off");
   await rconCommand("save-all flush");

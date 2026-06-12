@@ -4,13 +4,14 @@ import fs from "fs";
 import path from "path";
 import { config } from "@/lib/config";
 import { getStatus, stopServer, startServer } from "@/lib/docker";
+import { resolveWorldDir, invalidateWorldDirCache } from "@/lib/nbt-reader";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 function worldPath(): string {
-  return path.join(config.mcDataPath, config.worldName);
+  return resolveWorldDir();
 }
 
 async function setSeedInProperties(seed: string): Promise<void> {
@@ -50,6 +51,7 @@ export async function POST(req: NextRequest) {
 
   // Write seed to server.properties (empty = random)
   await setSeedInProperties(seed);
+  invalidateWorldDirCache();
 
   if (wasRunning) {
     await startServer();

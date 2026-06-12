@@ -42,6 +42,11 @@ function fmtSize(b: number | null): string {
 function fmtDate(s: string): string {
   return new Date(s).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
 }
+const RETENTION_DAYS = 7;
+function daysLeft(created: string): number {
+  const expiry = new Date(created).getTime() + RETENTION_DAYS * 86_400_000;
+  return Math.max(0, Math.ceil((expiry - Date.now()) / 86_400_000));
+}
 
 export default function WorldPage() {
   const [info, setInfo] = useState<WorldInfo | null>(null);
@@ -117,19 +122,23 @@ export default function WorldPage() {
   async function downloadWorld() {
     setDownloading(true);
     setMsg("Preparing world download…");
+    setMsgOk(true);
     try {
-      const r = await fetch("/api/world/download");
-      if (!r.ok) { const d = await r.json().catch(() => ({})); setMsg(d.error || "Download failed"); return; }
-      const blob = await r.blob();
-      const cd = r.headers.get("Content-Disposition") || "";
-      const fnMatch = cd.match(/filename="([^"]+)"/);
-      const filename = fnMatch?.[1] || "world.zip";
-      const url = URL.createObjectURL(blob);
+      // Sanity-check the world exists before kicking off the download so a
+      // misconfigured path shows an error instead of an empty zip.
+      const w = await fetch("/api/world").then((r) => r.json());
+      if (!w.sizeBytes) {
+        setMsg("World folder not found or empty — check WORLD_NAME / volume mount");
+        setMsgOk(false);
+        return;
+      }
+      // Navigate directly so the browser streams the zip to disk instead of
+      // buffering hundreds of MB in memory.
       const a = document.createElement("a");
-      a.href = url; a.download = filename; a.click();
-      URL.revokeObjectURL(url);
-      setMsg(`Downloaded ${filename}`);
-      setMsgOk(true);
+      a.href = "/api/world/download";
+      a.download = "";
+      a.click();
+      setMsg(`Downloading ${w.name} (${fmtSize(w.sizeBytes)})… check your browser downloads`);
     } catch (e: any) {
       setMsg(e?.message || "Download failed");
       setMsgOk(false);
@@ -299,7 +308,7 @@ export default function WorldPage() {
             <div>
               <div style={{ fontWeight: 700, fontSize: 15 }}>Backups</div>
               <div style={{ color: "var(--text-dim)", fontSize: 12.5, marginTop: 2 }}>
-                {gdrive ? "Uploads to Google Drive" : "Stored locally · Configure Google Drive for cloud backups"}
+                {gdrive ? "Stored on VPS + mirrored to Google Drive" : "Stored locally on the VPS"} · local copies auto-delete after 7 days
               </div>
             </div>
           </div>
@@ -345,13 +354,18 @@ export default function WorldPage() {
                     <span className="chip" style={{ textTransform: "capitalize" }}>{b.type}</span>
                   </td>
                   <td>
-                    {b.link ? (
-                      <a href={b.link} target="_blank" rel="noreferrer" className="chip chip-accent">
-                        Drive ↗
-                      </a>
-                    ) : (
-                      <span style={{ color: "var(--warn)", fontSize: 12 }}>{b.status}</span>
-                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {b.link ? (
+                        <a href={b.link} target="_blank" rel="noreferrer" className="chip chip-accent">
+                          Drive ↗
+                        </a>
+                      ) : (
+                        <span className="chip">VPS</span>
+                      )}
+                      <span style={{ color: daysLeft(b.created_at) <= 1 ? "var(--danger)" : "var(--text-dim)", fontSize: 11.5 }}>
+                        {b.link ? "" : `expires in ${daysLeft(b.created_at)}d`}
+                      </span>
+                    </div>
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>

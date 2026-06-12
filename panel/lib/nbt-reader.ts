@@ -1,16 +1,70 @@
 import { promises as fs } from "fs";
+import fsSync from "fs";
 import path from "path";
 import * as nbt from "prismarine-nbt";
 import { config } from "./config";
 
+// The active world folder is whatever server.properties `level-name` points at,
+// which may differ from the WORLD_NAME env. Resolve it by checking for level.dat,
+// falling back to a directory scan. Cached briefly since it rarely changes.
+let cachedWorldDir: { dir: string; at: number } | null = null;
+
+export function resolveWorldDir(): string {
+  if (cachedWorldDir && Date.now() - cachedWorldDir.at < 30_000) {
+    return cachedWorldDir.dir;
+  }
+  const base = config.mcDataPath;
+  const candidates: string[] = [];
+  try {
+    const raw = fsSync.readFileSync(path.join(base, "server.properties"), "utf8");
+    const m = raw.match(/^level-name=(.*)$/m);
+    if (m && m[1].trim()) candidates.push(m[1].trim());
+  } catch {}
+  candidates.push(config.worldName, "world");
+
+  for (const c of candidates) {
+    const dir = path.join(base, c);
+    if (fsSync.existsSync(path.join(dir, "level.dat"))) {
+      cachedWorldDir = { dir, at: Date.now() };
+      return dir;
+    }
+  }
+  // Last resort: any directory under mcDataPath holding a level.dat.
+  try {
+    for (const e of fsSync.readdirSync(base, { withFileTypes: true })) {
+      if (e.isDirectory() && fsSync.existsSync(path.join(base, e.name, "level.dat"))) {
+        const dir = path.join(base, e.name);
+        cachedWorldDir = { dir, at: Date.now() };
+        return dir;
+      }
+    }
+  } catch {}
+  // Nothing found; return the configured path and let callers report it missing.
+  return path.join(base, config.worldName);
+}
+
+export function invalidateWorldDirCache(): void {
+  cachedWorldDir = null;
+}
+
 function worldDir(): string {
-  return path.join(config.mcDataPath, config.worldName);
+  return resolveWorldDir();
+}
+
+export interface Enchant {
+  id: string; // e.g. minecraft:unbreaking
+  lvl: number;
 }
 
 export interface InvItem {
   slot: number;
   id: string; // e.g. minecraft:diamond_sword
   count: number;
+  name: string | null; // custom display name, if renamed
+  enchants: Enchant[];
+  damage: number | null; // durability used
+  maxDamage: number | null; // from component, if present
+  potion: string | null; // e.g. minecraft:swiftness
 }
 
 export interface DeathLocation {
@@ -43,13 +97,79 @@ async function parseDat(file: string): Promise<any> {
   return simplify(parsed);
 }
 
+// Enchantments appear as a legacy list [{id, lvl}] (pre-1.20.5 `tag`), as
+// { levels: { "minecraft:x": n } } (1.20.5–1.21.4 components), or as a plain
+// { "minecraft:x": n } map (1.21.5+).
+function parseEnchants(raw: any): Enchant[] {
+  const out: Enchant[] = [];
+  if (!raw) return out;
+  if (Array.isArray(raw)) {
+    for (const e of raw) {
+      if (e?.id) out.push({ id: String(e.id), lvl: Number(e.lvl ?? e.level ?? 1) });
+    }
+    return out;
+  }
+  if (typeof raw !== "object") return out;
+  const levels = raw.levels && typeof raw.levels === "object" ? raw.levels : raw;
+  for (const [k, v] of Object.entries(levels)) {
+    if (typeof v === "number") out.push({ id: k, lvl: v });
+  }
+  return out;
+}
+
+// Custom names are JSON text components ('"Excalibur"' / '{"text":"..."}')
+// or plain strings/objects in newer formats.
+function parseName(raw: any): string | null {
+  if (raw == null) return null;
+  if (typeof raw === "object") return raw.text || null;
+  if (typeof raw !== "string") return null;
+  try {
+    const j = JSON.parse(raw);
+    if (typeof j === "string") return j;
+    if (Array.isArray(j)) return j.map((p: any) => (typeof p === "string" ? p : p?.text || "")).join("");
+    if (j?.text) return j.text;
+  } catch {}
+  return raw;
+}
+
 function mapItems(arr: any[] | undefined): InvItem[] {
   if (!Array.isArray(arr)) return [];
-  return arr.map((it) => ({
-    slot: typeof it.Slot === "number" ? it.Slot : -1,
-    id: it.id || "minecraft:unknown",
-    count: it.count ?? it.Count ?? 1,
-  }));
+  return arr.map((it) => {
+    const comp = it.components || {};
+    const tag = it.tag || {};
+    const enchants = [
+      ...parseEnchants(comp["minecraft:enchantments"]),
+      ...parseEnchants(comp["minecraft:stored_enchantments"]),
+      ...parseEnchants(tag.Enchantments),
+      ...parseEnchants(tag.StoredEnchantments),
+    ];
+    const name =
+      parseName(comp["minecraft:custom_name"]) ?? parseName(tag.display?.Name);
+    const damage =
+      typeof comp["minecraft:damage"] === "number"
+        ? comp["minecraft:damage"]
+        : typeof tag.Damage === "number"
+          ? tag.Damage
+          : null;
+    const maxDamage =
+      typeof comp["minecraft:max_damage"] === "number" ? comp["minecraft:max_damage"] : null;
+    const potionRaw = comp["minecraft:potion_contents"];
+    const potion =
+      typeof potionRaw === "string"
+        ? potionRaw
+        : potionRaw?.potion ?? (typeof tag.Potion === "string" ? tag.Potion : null);
+
+    return {
+      slot: typeof it.Slot === "number" ? it.Slot : -1,
+      id: it.id || "minecraft:unknown",
+      count: it.count ?? it.Count ?? 1,
+      name,
+      enchants,
+      damage,
+      maxDamage,
+      potion,
+    };
+  });
 }
 
 export async function listPlayerUuids(): Promise<string[]> {
@@ -121,7 +241,7 @@ export interface WorldInfo {
 
 export async function readWorldInfo(): Promise<WorldInfo> {
   const base: WorldInfo = {
-    name: config.worldName,
+    name: path.basename(worldDir()),
     seed: null,
     gameTime: null,
     dayTime: null,

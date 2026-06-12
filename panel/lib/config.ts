@@ -21,6 +21,7 @@ export const config = {
 
   dataDir: process.env.PANEL_DATA_DIR || "./data",
   backupSchedule: process.env.BACKUP_SCHEDULE || "", // e.g. "0 */6 * * *", empty = off
+  backupRetentionDays: parseInt(process.env.BACKUP_RETENTION_DAYS || "7", 10),
 } as const;
 
 export function isGDriveConfigured(): boolean {

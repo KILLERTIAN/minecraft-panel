@@ -46,6 +46,12 @@ export function listBackups(): BackupRow[] {
     .all() as BackupRow[];
 }
 
+export function listBackupsOlderThan(isoCutoff: string): BackupRow[] {
+  return init()
+    .prepare("SELECT * FROM backups WHERE created_at < ?")
+    .all(isoCutoff) as BackupRow[];
+}
+
 export function getBackup(id: number): BackupRow | undefined {
   return init().prepare("SELECT * FROM backups WHERE id = ?").get(id) as
     | BackupRow

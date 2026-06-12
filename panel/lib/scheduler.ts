@@ -1,10 +1,11 @@
 import cron, { ScheduledTask } from "node-cron";
-import { createBackup } from "./backup";
+import { createBackup, cleanupOldBackups } from "./backup";
 import { getSetting } from "./db";
 import { listPlayers } from "./rcon";
 import { stopServer, getStatus } from "./docker";
 
 let backupTask: ScheduledTask | null = null;
+let cleanupTask: ScheduledTask | null = null;
 let idleTask: ScheduledTask | null = null;
 let idleSinceMs: number | null = null;
 let idleTimeoutMinutes = 0;
@@ -70,6 +71,15 @@ export function getIdleShutdownMinutes(): number {
 export function initSchedule(): void {
   const saved = getSetting("backup_schedule") || process.env.BACKUP_SCHEDULE || "";
   if (saved) applySchedule(saved);
+
+  // Prune expired local backups daily, and once at startup.
+  if (cleanupTask) { cleanupTask.stop(); cleanupTask = null; }
+  cleanupTask = cron.schedule("15 4 * * *", () => {
+    cleanupOldBackups().catch((e: any) =>
+      console.error("[scheduler] backup cleanup failed:", e?.message)
+    );
+  });
+  cleanupOldBackups().catch(() => {});
 
   const idleMin = parseInt(
     getSetting("idle_shutdown_minutes") || process.env.IDLE_SHUTDOWN_MINUTES || "0",

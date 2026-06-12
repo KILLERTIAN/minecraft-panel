@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listPlayers } from "@/lib/rcon";
+import { listPlayers, getLivePosition } from "@/lib/rcon";
 import { listPlayerUuids, readPlayerData } from "@/lib/nbt-reader";
 import { getName, avatarUrl } from "@/lib/mojang";
 
@@ -24,15 +24,23 @@ export async function GET() {
         getName(uuid),
       ]);
       const displayName = name || uuid.slice(0, 8);
+      const isOnline = name ? onlineSet.has(name.toLowerCase()) : false;
+      // Online players: ask the server for the live position, since playerdata
+      // files only update on autosave/logout.
+      let position = data?.position ?? null;
+      if (isOnline && name) {
+        const live = await getLivePosition(name).catch(() => null);
+        if (live) position = live;
+      }
       return {
         uuid,
         name: displayName,
         avatar: name ? avatarUrl(name) : null,
-        online: name ? onlineSet.has(name.toLowerCase()) : false,
+        online: isOnline,
         health: data?.health ?? null,
         foodLevel: data?.foodLevel ?? null,
         xpLevel: data?.xpLevel ?? null,
-        position: data?.position ?? null,
+        position,
         death: data?.death ?? null,
         inventoryCount: data?.inventory.length ?? 0,
         lastModified: data?.lastModified ?? null,
