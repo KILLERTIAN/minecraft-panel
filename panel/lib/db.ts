@@ -26,6 +26,13 @@ function init(): Database.Database {
       key   TEXT PRIMARY KEY,
       value TEXT
     );
+    CREATE TABLE IF NOT EXISTS players (
+      uuid        TEXT PRIMARY KEY,
+      name        TEXT,
+      last_online TEXT,
+      data_json   TEXT,
+      updated_at  TEXT
+    );
   `);
   return db;
 }
@@ -80,6 +87,52 @@ export function insertBackup(b: {
 
 export function deleteBackup(id: number): void {
   init().prepare("DELETE FROM backups WHERE id = ?").run(id);
+}
+
+export interface PlayerSnapshotRow {
+  uuid: string;
+  name: string | null;
+  last_online: string | null;
+  data_json: string | null;
+  updated_at: string | null;
+}
+
+export function listPlayerSnapshots(): PlayerSnapshotRow[] {
+  return init().prepare("SELECT * FROM players").all() as PlayerSnapshotRow[];
+}
+
+export function getPlayerSnapshot(uuid: string): PlayerSnapshotRow | undefined {
+  return init().prepare("SELECT * FROM players WHERE uuid = ?").get(uuid) as
+    | PlayerSnapshotRow
+    | undefined;
+}
+
+// Upsert latest known player state. Null name/data leave the stored values
+// untouched so a failed Mojang lookup or missing .dat never erases history.
+export function upsertPlayerSnapshot(p: {
+  uuid: string;
+  name?: string | null;
+  online?: boolean;
+  dataJson?: string | null;
+}): void {
+  const now = new Date().toISOString();
+  init()
+    .prepare(
+      `INSERT INTO players (uuid, name, last_online, data_json, updated_at)
+       VALUES (@uuid, @name, @last_online, @data_json, @updated_at)
+       ON CONFLICT(uuid) DO UPDATE SET
+         name        = COALESCE(excluded.name, players.name),
+         last_online = COALESCE(excluded.last_online, players.last_online),
+         data_json   = COALESCE(excluded.data_json, players.data_json),
+         updated_at  = excluded.updated_at`
+    )
+    .run({
+      uuid: p.uuid,
+      name: p.name ?? null,
+      last_online: p.online ? now : null,
+      data_json: p.dataJson ?? null,
+      updated_at: now,
+    });
 }
 
 export function getSetting(key: string): string | null {
