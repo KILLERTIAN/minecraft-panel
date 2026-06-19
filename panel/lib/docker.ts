@@ -116,6 +116,83 @@ export async function restartServer(): Promise<void> {
   await (await mcAsync()).restart({ t: 60 });
 }
 
+// --- Version / container env management ---------------------------------
+
+// Parse the container's Env array (["KEY=val", ...]) into a map.
+function envArrayToMap(env: string[] | null | undefined): Record<string, string> {
+  const m: Record<string, string> = {};
+  for (const e of env ?? []) {
+    const i = e.indexOf("=");
+    if (i === -1) m[e] = "";
+    else m[e.slice(0, i)] = e.slice(i + 1);
+  }
+  return m;
+}
+
+export interface ServerVersionInfo {
+  type: string; // VANILLA, FABRIC, PAPER, ...
+  version: string; // e.g. 26.2 or LATEST
+  loaderVersion: string | null; // FABRIC_LOADER_VERSION, if set
+}
+
+export async function getVersionInfo(): Promise<ServerVersionInfo> {
+  const info = await (await mcAsync()).inspect();
+  const env = envArrayToMap(info.Config?.Env);
+  return {
+    type: env.TYPE || "VANILLA",
+    version: env.VERSION || "LATEST",
+    loaderVersion: env.FABRIC_LOADER_VERSION || null,
+  };
+}
+
+// Recreate the mc container with overridden env vars, preserving all other
+// config (image, volumes, ports, healthcheck, labels). The world lives in a
+// named volume, so deleting the container never touches world data.
+//
+// On Coolify the next platform deploy will reset env to the compose/UI values;
+// callers should warn the user to also update the Coolify env var for permanence.
+export async function recreateWithEnv(overrides: Record<string, string | null>): Promise<void> {
+  const container = await mcAsync();
+  const info = await container.inspect();
+
+  const name = info.Name.replace(/^\//, "");
+  const currentEnv = envArrayToMap(info.Config?.Env);
+
+  // Apply overrides: null deletes the key, string sets it.
+  for (const [k, v] of Object.entries(overrides)) {
+    if (v === null) delete currentEnv[k];
+    else currentEnv[k] = v;
+  }
+  const newEnv = Object.entries(currentEnv).map(([k, v]) => `${k}=${v}`);
+
+  // Stop and remove the existing container.
+  try {
+    if (info.State.Running) await container.stop({ t: 60 });
+  } catch { /* already stopped */ }
+  await container.remove({ force: true });
+
+  // Recreate with the same low-level config + new Env, reusing HostConfig
+  // (binds, port bindings, restart policy) verbatim so volumes/ports persist.
+  const created = await docker.createContainer({
+    name,
+    Image: info.Config.Image,
+    Env: newEnv,
+    Cmd: info.Config.Cmd ?? undefined,
+    Entrypoint: info.Config.Entrypoint ?? undefined,
+    Labels: info.Config.Labels ?? undefined,
+    WorkingDir: info.Config.WorkingDir || undefined,
+    Tty: info.Config.Tty,
+    OpenStdin: info.Config.OpenStdin,
+    ExposedPorts: info.Config.ExposedPorts ?? undefined,
+    Healthcheck: info.Config.Healthcheck ?? undefined,
+    HostConfig: info.HostConfig,
+  });
+
+  // Refresh the cached container name/id, then start.
+  _mcName = created.id;
+  await created.start();
+}
+
 export async function getLogStream(tail = 200) {
   const stream = await (await mcAsync()).logs({
     follow: true, stdout: true, stderr: true, tail, timestamps: false,

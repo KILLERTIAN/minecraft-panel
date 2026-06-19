@@ -8,9 +8,8 @@ services:
       - "39148:25565"
     environment:
       EULA: "TRUE"
-      TYPE: "FABRIC"
-      VERSION: "26.1.2"
-      FABRIC_LOADER_VERSION: "0.19.3"
+      TYPE: "VANILLA"
+      VERSION: "26.2"
       ONLINE_MODE: "FALSE"
       MEMORY: "${MC_MEMORY:-3G}"
       USE_AIKAR_FLAGS: "true"

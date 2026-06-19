@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SlidersHorizontal, Zap, Save, RotateCcw, Timer, Check, AlertCircle } from "lucide-react";
+import { SlidersHorizontal, Zap, Save, RotateCcw, Timer, Check, AlertCircle, Package, AlertTriangle } from "lucide-react";
 
 const FIELD_META: Record<string, {
   label: string;
@@ -92,6 +92,124 @@ function FieldInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
     />
+  );
+}
+
+const FABRIC_LIKE = ["FABRIC", "QUILT"];
+
+function VersionCard() {
+  const [info, setInfo] = useState<{ type: string; version: string; loaderVersion: string | null; types: string[] } | null>(null);
+  const [type, setType] = useState("");
+  const [version, setVersion] = useState("");
+  const [loaderVersion, setLoaderVersion] = useState("");
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [msgType, setMsgType] = useState<"ok" | "err">("ok");
+
+  useEffect(() => {
+    fetch("/api/server/version")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.error) { setMsg(d.error); setMsgType("err"); return; }
+        setInfo(d);
+        setType(d.type);
+        setVersion(d.version);
+        setLoaderVersion(d.loaderVersion || "");
+      })
+      .catch((e) => { setMsg(String(e)); setMsgType("err"); });
+  }, []);
+
+  const dirty = info && (type !== info.type || version !== info.version || (FABRIC_LIKE.includes(type) && loaderVersion !== (info.loaderVersion || "")));
+
+  async function apply() {
+    setBusy(true);
+    setMsg("");
+    try {
+      const r = await fetch("/api/server/version", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, version, loaderVersion: FABRIC_LIKE.includes(type) ? loaderVersion : null }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setMsg(d.error || "Failed"); setMsgType("err"); setBusy(false); return; }
+      setMsgType("ok");
+      setMsg(`Applied ${d.type} ${d.version} · backup #${d.backupId} taken first. ${d.note || ""}`);
+      setInfo((p) => p && { ...p, type: d.type, version: d.version, loaderVersion: d.loaderVersion });
+      setConfirm(false);
+    } catch (e: any) {
+      setMsg(e?.message || "Failed"); setMsgType("err");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ marginTop: 20 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 18 }}>
+        <div style={{ width: 38, height: 38, background: "var(--accent-dim)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Package size={18} color="var(--accent)" />
+        </div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15, letterSpacing: "-0.2px" }}>Server Version</div>
+          <div style={{ color: "var(--text-dim)", fontSize: 13, marginTop: 2 }}>
+            {info ? <>Currently <b>{info.type} {info.version}</b>{info.loaderVersion ? ` (loader ${info.loaderVersion})` : ""}</> : "Loading…"}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, marginBottom: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+          <label style={{ fontSize: 11.5, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>Type</label>
+          <select value={type} onChange={(e) => setType(e.target.value)} disabled={!info}>
+            {info?.types.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+          <label style={{ fontSize: 11.5, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>Version</label>
+          <input type="text" value={version} placeholder="26.2 or LATEST" onChange={(e) => setVersion(e.target.value)} disabled={!info} />
+        </div>
+        {FABRIC_LIKE.includes(type) && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            <label style={{ fontSize: 11.5, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>Loader Version</label>
+            <input type="text" value={loaderVersion} placeholder="e.g. 0.19.3" onChange={(e) => setLoaderVersion(e.target.value)} disabled={!info} />
+          </div>
+        )}
+      </div>
+
+      {dirty && (
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "12px 14px", borderRadius: "var(--radius-sm)", background: "rgba(245,166,35,0.08)", border: "1px solid rgba(245,166,35,0.2)", marginBottom: 14 }}>
+          <AlertTriangle size={16} color="var(--warn)" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ fontSize: 12.5, color: "var(--text)", lineHeight: 1.5 }}>
+            Changing version recreates the server container. A world backup is taken first automatically.
+            World upgrades are <b>one-way</b> — you can't open an upgraded world in an older version.
+            Switching mod loaders (e.g. Fabric → Vanilla) drops all mods.
+            <label style={{ display: "flex", gap: 7, alignItems: "center", marginTop: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} style={{ width: "auto" }} />
+              I understand, back up and proceed
+            </label>
+          </div>
+        </div>
+      )}
+
+      <button className="btn-primary" onClick={apply} disabled={!dirty || !confirm || busy} type="button">
+        {busy ? (
+          <>
+            <span style={{ width: 15, height: 15, border: "2px solid currentColor", borderTopColor: "transparent", borderRadius: "50%", display: "inline-block", animation: "spin 0.8s linear infinite" }} />
+            Backing up & recreating…
+          </>
+        ) : (
+          <><Package size={14} /> Apply Version</>
+        )}
+      </button>
+
+      {msg && (
+        <div style={{ marginTop: 12, fontSize: 13, color: msgType === "err" ? "var(--danger)" : "var(--accent)", display: "flex", alignItems: "flex-start", gap: 7, lineHeight: 1.5 }}>
+          {msgType === "ok" ? <Check size={14} style={{ flexShrink: 0, marginTop: 2 }} /> : <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 2 }} />}
+          <span>{msg}</span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -329,6 +447,8 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      <VersionCard />
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
