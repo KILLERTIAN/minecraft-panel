@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { rconCommand } from "@/lib/rcon";
+import { rconCommandSafe } from "@/lib/rcon";
 import { getStatus } from "@/lib/docker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Properties that can be applied live via RCON without restart.
+// NOTE: vanilla/Fabric has NO `/pvp` command — the `pvp` server property is
+// only read at server start, so it is intentionally NOT here (restart-only).
 const LIVE_APPLY: Record<string, (val: string) => string[]> = {
   gamemode: (v) => [`defaultgamemode ${v}`],
   difficulty: (v) => [`difficulty ${v}`],
-  pvp: (v) => [`pvp ${v}`],
   "max-players": (v) => [`setmaxplayers ${v}`],
   "white-list": (v) => [`whitelist ${v === "true" ? "on" : "off"}`],
   "enforce-whitelist": (v) => [`whitelist reload`],
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
     if (cmds.length === 0) { skipped.push(key); continue; }
     for (const cmd of cmds) {
       try {
-        await rconCommand(cmd);
+        await rconCommandSafe(cmd);
         applied.push(key);
       } catch (e: any) {
         errors[key] = e?.message || "rcon error";

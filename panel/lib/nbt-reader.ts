@@ -51,6 +51,21 @@ function worldDir(): string {
   return resolveWorldDir();
 }
 
+// Per-player data moved in MC 1.21.9 (snapshot 26.x): the top-level
+// world/playerdata, world/stats, world/advancements folders are now nested
+// under world/players/{data,stats,advancements}. Resolve each by preferring the
+// new layout, falling back to the legacy path so older servers still work.
+function playerSubDir(kind: "data" | "stats" | "advancements"): string {
+  const w = worldDir();
+  const legacy = kind === "data" ? "playerdata" : kind; // stats/advancements keep their name
+  const nested = path.join(w, "players", kind);
+  if (fsSync.existsSync(nested)) return nested;
+  const flat = path.join(w, legacy);
+  if (fsSync.existsSync(flat)) return flat;
+  // Neither exists yet (fresh world): default to the new layout.
+  return nested;
+}
+
 export interface Enchant {
   id: string; // e.g. minecraft:unbreaking
   lvl: number;
@@ -174,7 +189,7 @@ function mapItems(arr: any[] | undefined): InvItem[] {
 
 export async function listPlayerUuids(): Promise<string[]> {
   try {
-    const dir = path.join(worldDir(), "playerdata");
+    const dir = playerSubDir("data");
     const files = await fs.readdir(dir);
     return files
       .filter((f) => f.endsWith(".dat") && !f.endsWith(".dat_old"))
@@ -185,7 +200,7 @@ export async function listPlayerUuids(): Promise<string[]> {
 }
 
 export async function readPlayerData(uuid: string): Promise<PlayerData | null> {
-  const file = path.join(worldDir(), "playerdata", `${uuid}.dat`);
+  const file = path.join(playerSubDir("data"), `${uuid}.dat`);
   try {
     const stat = await fs.stat(file);
     const d = await parseDat(file);
@@ -243,7 +258,7 @@ export interface PlayerStats {
 export async function readPlayerStats(uuid: string): Promise<PlayerStats | null> {
   try {
     const raw = await fs.readFile(
-      path.join(worldDir(), "stats", `${uuid}.json`),
+      path.join(playerSubDir("stats"), `${uuid}.json`),
       "utf8"
     );
     const custom = JSON.parse(raw)?.stats?.["minecraft:custom"] || {};

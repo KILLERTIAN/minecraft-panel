@@ -30,6 +30,7 @@ interface PlayersInfo {
   online: number;
   max: number;
   names: string[];
+  error?: string;
 }
 
 function fmtUptime(s: number | null): string {
@@ -109,8 +110,12 @@ export default function Dashboard() {
       const d = await r.json();
       setStatus(d);
       if (d.running) {
+        // Read the body even on 503 — it carries the error reason so the
+        // dashboard can show why the count is unavailable instead of stale data.
         const pr = await fetch("/api/players/list");
-        if (pr.ok) setPlayers(await pr.json());
+        try {
+          setPlayers(await pr.json());
+        } catch {}
       } else {
         setPlayers(null);
       }

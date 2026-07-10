@@ -211,6 +211,27 @@ export async function getRecentLogs(tail = 200): Promise<string> {
   }
 }
 
+// Run a command inside the mc container and return combined stdout/stderr.
+// Used as a fallback for player listing when the TCP RCON connection from the
+// panel to the mc container fails (DNS, restart, port). itzg ships `rcon-cli`,
+// which talks to RCON over the container's own loopback.
+export async function execInMc(cmd: string[]): Promise<string> {
+  const c = await mcAsync();
+  const exec = await c.exec({
+    Cmd: cmd,
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+  const stream = (await exec.start({})) as unknown as NodeJS.ReadableStream;
+  const chunks: Buffer[] = [];
+  await new Promise<void>((resolve, reject) => {
+    stream.on("data", (d: Buffer) => chunks.push(d));
+    stream.on("end", () => resolve());
+    stream.on("error", reject);
+  });
+  return demuxToString(Buffer.concat(chunks));
+}
+
 export { docker, mcAsync as mc };
 
 export function demuxToString(buf: Buffer): string {

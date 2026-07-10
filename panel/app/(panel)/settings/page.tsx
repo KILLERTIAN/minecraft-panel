@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SlidersHorizontal, Zap, Save, RotateCcw, Timer, Check, AlertCircle, Package, AlertTriangle } from "lucide-react";
+import { SlidersHorizontal, Zap, Save, RotateCcw, Timer, Check, AlertCircle, Package, AlertTriangle, Shield, Plus, Trash2, UserPlus } from "lucide-react";
 
 const FIELD_META: Record<string, {
   label: string;
@@ -15,7 +15,7 @@ const FIELD_META: Record<string, {
   difficulty: { label: "Difficulty", type: "select", options: ["peaceful", "easy", "normal", "hard"], live: true },
   gamemode: { label: "Default Gamemode", type: "select", options: ["survival", "creative", "adventure", "spectator"], live: true },
   hardcore: { label: "Hardcore Mode", type: "bool", desc: "Players are banned on death" },
-  pvp: { label: "PvP", type: "bool", live: true, desc: "Player vs player combat" },
+  pvp: { label: "PvP", type: "bool", desc: "Player vs player combat · applies on restart" },
   "allow-flight": { label: "Allow Flight", type: "bool" },
   "allow-nether": { label: "Allow Nether", type: "bool" },
   "enable-command-block": { label: "Command Blocks", type: "bool" },
@@ -92,6 +92,125 @@ function FieldInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
     />
+  );
+}
+
+// Live friendly-fire control via scoreboard teams. Unlike the `pvp` property
+// (restart-only in vanilla), team friendlyFire applies instantly over RCON.
+function TeamsCard() {
+  const [teams, setTeams] = useState<string[] | null>(null);
+  const [running, setRunning] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [newTeam, setNewTeam] = useState("");
+  const [joinFor, setJoinFor] = useState<{ team: string; player: string } | null>(null);
+  const [msg, setMsg] = useState("");
+  const [msgType, setMsgType] = useState<"ok" | "err">("ok");
+
+  const load = async () => {
+    const d = await fetch("/api/server/teams").then((r) => r.json()).catch(() => ({ teams: [] }));
+    setRunning(d.running !== false);
+    setTeams(d.teams || []);
+  };
+  useEffect(() => { load(); }, []);
+
+  async function call(body: Record<string, unknown>, okMsg: string) {
+    setBusy(JSON.stringify(body));
+    setMsg("");
+    const r = await fetch("/api/server/teams", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json().catch(() => ({}));
+    setBusy(null);
+    if (r.ok) { setMsgType("ok"); setMsg(okMsg); await load(); }
+    else { setMsgType("err"); setMsg(d.error || "Failed"); }
+  }
+
+  return (
+    <div className="card" style={{ marginTop: 20 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 18 }}>
+        <div style={{ width: 38, height: 38, background: "var(--accent-dim)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Shield size={18} color="var(--accent)" />
+        </div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15, letterSpacing: "-0.2px", display: "flex", alignItems: "center", gap: 6 }}>
+            Teams &amp; Friendly Fire
+            <span className="chip chip-accent" style={{ fontSize: 10 }}><Zap size={9} />Live</span>
+          </div>
+          <div style={{ color: "var(--text-dim)", fontSize: 13, marginTop: 2 }}>
+            Toggle friendly fire per team — applies instantly, no restart. (Global PvP is restart-only.)
+          </div>
+        </div>
+      </div>
+
+      {!running && (
+        <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Start the server to manage teams.</div>
+      )}
+
+      {running && teams !== null && teams.length === 0 && (
+        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>
+          No teams yet. Create one, then assign players — teammates can be shielded from each other&apos;s damage.
+        </div>
+      )}
+
+      {running && teams && teams.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+          {teams.map((t) => (
+            <div key={t} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "var(--bg-elev2)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 600, fontSize: 14, flex: 1, minWidth: 100 }}>{t}</span>
+              <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} disabled={busy !== null}
+                onClick={() => call({ action: "friendlyFire", team: t, on: false }, `Friendly fire OFF for ${t}`)}>
+                Friendly fire: Off
+              </button>
+              <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} disabled={busy !== null}
+                onClick={() => call({ action: "friendlyFire", team: t, on: true }, `Friendly fire ON for ${t}`)}>
+                On
+              </button>
+              <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} disabled={busy !== null}
+                onClick={() => setJoinFor(joinFor?.team === t ? null : { team: t, player: "" })}>
+                <UserPlus size={13} /> Add player
+              </button>
+              <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px", color: "var(--danger)" }} disabled={busy !== null}
+                onClick={() => call({ action: "remove", team: t }, `Removed team ${t}`)}>
+                <Trash2 size={13} />
+              </button>
+              {joinFor?.team === t && (
+                <div style={{ display: "flex", gap: 6, width: "100%", marginTop: 6 }}>
+                  <input type="text" placeholder="Player name" value={joinFor.player}
+                    onChange={(e) => setJoinFor({ team: t, player: e.target.value })}
+                    style={{ flex: 1 }} />
+                  <button className="btn-primary" style={{ fontSize: 12, padding: "6px 12px" }}
+                    disabled={!joinFor.player || busy !== null}
+                    onClick={() => { call({ action: "join", team: t, player: joinFor.player }, `Added ${joinFor.player} to ${t}`); setJoinFor(null); }}>
+                    Add
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {running && (
+        <div style={{ display: "flex", gap: 8 }}>
+          <input type="text" placeholder="New team name" value={newTeam}
+            onChange={(e) => setNewTeam(e.target.value.replace(/\s+/g, "_"))}
+            style={{ flex: 1, maxWidth: 240 }} />
+          <button className="btn-primary" style={{ fontSize: 13 }} disabled={!newTeam || busy !== null}
+            onClick={() => { call({ action: "create", team: newTeam }, `Created team ${newTeam}`); setNewTeam(""); }}>
+            <Plus size={14} /> Create
+          </button>
+        </div>
+      )}
+
+      {msg && (
+        <div style={{ marginTop: 12, fontSize: 13, color: msgType === "err" ? "var(--danger)" : "var(--accent)", display: "flex", alignItems: "center", gap: 7 }}>
+          {msgType === "ok" ? <Check size={14} /> : <AlertCircle size={14} />}
+          {msg}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -447,6 +566,8 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      <TeamsCard />
 
       <VersionCard />
 

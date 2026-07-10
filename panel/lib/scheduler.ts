@@ -36,8 +36,16 @@ export function applyIdleShutdown(minutes: number): void {
       const status = await getStatus();
       if (!status.running) { idleSinceMs = null; return; }
 
-      const { names } = await listPlayers().catch(() => ({ names: [] as string[] }));
-      if (names.length > 0) {
+      // RCON failure must NOT count as "no players" — that causes false idle
+      // shutdowns. Skip this cycle and leave idleSinceMs untouched.
+      let players: { online: number; names: string[] };
+      try {
+        players = await listPlayers();
+      } catch (e: any) {
+        console.warn(`[scheduler] idle check: list failed, skipping cycle: ${e?.message}`);
+        return;
+      }
+      if (players.online > 0 || players.names.length > 0) {
         idleSinceMs = null;
         return;
       }
