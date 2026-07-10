@@ -40,6 +40,19 @@ function localBackupFile(filename: string): string | null {
   return null;
 }
 
+// Move a directory, falling back to copy+delete when src and dst live on
+// different filesystems (rename() throws EXDEV across mount points, e.g.
+// tmp on the app volume vs. the world on the mounted data volume).
+export async function moveDir(src: string, dst: string): Promise<void> {
+  try {
+    await fsp.rename(src, dst);
+  } catch (e: any) {
+    if (e?.code !== "EXDEV") throw e;
+    await fsp.cp(src, dst, { recursive: true });
+    await fsp.rm(src, { recursive: true, force: true });
+  }
+}
+
 async function zipDir(srcDir: string, outFile: string): Promise<number> {
   return new Promise((resolve, reject) => {
     const output = fs.createWriteStream(outFile);
@@ -175,15 +188,15 @@ export async function restoreBackup(id: number): Promise<void> {
 
     // Move current world aside (safety), move staged world in, drop old on success.
     if (fs.existsSync(world)) {
-      await fsp.rename(world, backupOld);
+      await moveDir(world, backupOld);
     }
     try {
-      await fsp.rename(extractedWorld, world);
+      await moveDir(extractedWorld, world);
       await fsp.rm(backupOld, { recursive: true, force: true }).catch(() => {});
     } catch (e) {
       // Roll back.
       await fsp.rm(world, { recursive: true, force: true }).catch(() => {});
-      if (fs.existsSync(backupOld)) await fsp.rename(backupOld, world);
+      if (fs.existsSync(backupOld)) await moveDir(backupOld, world);
       throw e;
     }
 

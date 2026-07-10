@@ -7,6 +7,7 @@ import extract from "extract-zip";
 import { config } from "@/lib/config";
 import { getStatus, stopServer, startServer } from "@/lib/docker";
 import { resolveWorldDir, invalidateWorldDirCache } from "@/lib/nbt-reader";
+import { moveDir } from "@/lib/backup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -87,18 +88,18 @@ export async function POST(req: NextRequest) {
   const backupOld = `${world}.pre-upload-${Date.now()}`;
 
   if (fs.existsSync(world)) {
-    await fsp.rename(world, backupOld);
+    await moveDir(world, backupOld);
   }
 
   try {
-    await fsp.rename(extractedWorld, world);
+    await moveDir(extractedWorld, world);
     try {
       execSync(`chown -R 1000:1000 "${path.resolve(world)}"`, { stdio: "ignore" });
     } catch { /* non-fatal */ }
     await fsp.rm(backupOld, { recursive: true, force: true }).catch(() => {});
   } catch (e: any) {
     await fsp.rm(world, { recursive: true, force: true }).catch(() => {});
-    if (fs.existsSync(backupOld)) await fsp.rename(backupOld, world);
+    if (fs.existsSync(backupOld)) await moveDir(backupOld, world);
     await fsp.rm(staging, { recursive: true, force: true }).catch(() => {});
     await fsp.unlink(zipPath).catch(() => {});
     return NextResponse.json({ error: `Failed to install world: ${e?.message}` }, { status: 500 });
