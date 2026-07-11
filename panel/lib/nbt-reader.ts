@@ -147,6 +147,19 @@ function parseName(raw: any): string | null {
   return raw;
 }
 
+// Minecraft stores armor and the offhand as special slot numbers inside the
+// same Inventory list: 100-103 for boots/leggings/chest/helmet and -106 for
+// the offhand. The players UI lays them out at slots 36-39 (armor) and 40
+// (offhand), so remap the special values into that flat range. Hotbar (0-8),
+// main inventory (9-35), and ender-chest slots (0-26) already line up.
+function remapSlot(slot: number): number {
+  if (slot === -106) return 40; // offhand
+  // Armor: NBT 103=helmet..100=boots. UI renders 36..39 top-to-bottom, so put
+  // the helmet at 36 (top) and boots at 39 (bottom) to match the game layout.
+  if (slot >= 100 && slot <= 103) return 36 + (103 - slot);
+  return slot;
+}
+
 function mapItems(arr: any[] | undefined): InvItem[] {
   if (!Array.isArray(arr)) return [];
   return arr.map((it) => {
@@ -175,7 +188,7 @@ function mapItems(arr: any[] | undefined): InvItem[] {
         : potionRaw?.potion ?? (typeof tag.Potion === "string" ? tag.Potion : null);
 
     return {
-      slot: typeof it.Slot === "number" ? it.Slot : -1,
+      slot: remapSlot(typeof it.Slot === "number" ? it.Slot : -1),
       id: it.id || "minecraft:unknown",
       count: it.count ?? it.Count ?? 1,
       name,
