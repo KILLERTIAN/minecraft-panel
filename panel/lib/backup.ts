@@ -3,6 +3,7 @@ import extract from "extract-zip";
 import fs from "fs";
 import { promises as fsp } from "fs";
 import path from "path";
+import { execSync } from "child_process";
 import { config, isGDriveConfigured } from "./config";
 import { saveOff, saveOn } from "./rcon";
 import { getStatus, stopServer, startServer } from "./docker";
@@ -192,6 +193,13 @@ export async function restoreBackup(id: number): Promise<void> {
     }
     try {
       await moveDir(extractedWorld, world);
+      // The mc container runs as uid/gid 1000 on the shared volume. When the
+      // move fell back to copy (cross-device), the new files are owned by the
+      // panel process, so the server would hit AccessDeniedException on
+      // session.lock. Restore ownership.
+      try {
+        execSync(`chown -R 1000:1000 "${path.resolve(world)}"`, { stdio: "ignore" });
+      } catch { /* non-fatal */ }
       await fsp.rm(backupOld, { recursive: true, force: true }).catch(() => {});
     } catch (e) {
       // Roll back.
