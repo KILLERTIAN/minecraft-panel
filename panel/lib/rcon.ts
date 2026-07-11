@@ -104,15 +104,20 @@ export function parseListOutput(raw: string): OnlinePlayers | null {
     return { online: parseInt(m[1], 10), max: parseInt(m[2], 10), names };
   }
 
-  // Fallback: at least pull "N ... M" numbers and any colon-suffixed names.
-  const nums = res.match(/(\d+)\D+(\d+)/);
-  if (nums) {
-    const after = res.split(":").slice(1).join(":");
-    const names = after
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    return { online: parseInt(nums[1], 10), max: parseInt(nums[2], 10), names };
+  // Fallback: pull "N ... M" numbers, but only from output that actually looks
+  // like a player list. Without this guard, error text (e.g. rcon-cli printing
+  // "2026/07/11 10:32 Failed to connect to RCON server dial tcp ...") gets
+  // mis-parsed into a bogus count like 2026/7.
+  if (/players?\s+online/i.test(res)) {
+    const nums = res.match(/(\d+)\D+(\d+)/);
+    if (nums) {
+      const after = res.split(":").slice(1).join(":");
+      const names = after
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return { online: parseInt(nums[1], 10), max: parseInt(nums[2], 10), names };
+    }
   }
   return null;
 }
@@ -136,6 +141,12 @@ export async function listPlayers(): Promise<OnlinePlayers> {
         `listPlayers failed: rcon=${rconErr?.message || rconErr}; exec=${execErr?.message || execErr}`
       );
     }
+  }
+
+  // rcon-cli exits 0 even when it can't reach the server, printing the failure
+  // to stdout. Treat that as RCON-down (throw) rather than "0 players".
+  if (/failed to connect|connection refused|dial tcp/i.test(raw)) {
+    throw new Error(`listPlayers failed: rcon-cli could not reach server: ${raw.trim()}`);
   }
 
   const parsed = parseListOutput(raw);
