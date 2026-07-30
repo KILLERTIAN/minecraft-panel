@@ -8,7 +8,7 @@ A self-hosted web control panel for a single Minecraft server. The panel and
 the Minecraft server run as two Docker containers sharing one data volume.
 Deployed via Coolify on a VPS behind a Caddy/Traefik proxy.
 
-Live server: `minecraft.garcade.in:39148`.
+Live server: `minecraft.garcade.in:26666`.
 
 ## Architecture
 
@@ -17,7 +17,7 @@ Two containers, defined in `docker-compose.coolify.yml` (production) and
 
 - **`mc`** — `itzg/minecraft-server`. Runs as **uid/gid 1000**. World data at
   `/data` inside the container. RCON on port 25575, Minecraft on 25565 (mapped
-  to host `39148`).
+  to host `26666`).
 - **`panel`** — the Next.js app (image `omsharma050322/mc-panel`). Runs as
   **root**. Mounts:
   - the shared `mc-data` volume at `/mc-data` (so it can read/write the world),

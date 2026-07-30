@@ -5,7 +5,7 @@ services:
     tty: true
     stdin_open: true
     ports:
-      - "39148:25565"
+      - "26666:25565"
     environment:
       EULA: "TRUE"
       TYPE: "VANILLA"
@@ -44,7 +44,7 @@ services:
       RCON_PASSWORD: "${RCON_PASSWORD}"
       MC_DATA_PATH: "/mc-data"
       WORLD_NAME: "${WORLD_NAME:-world}"
-      SERVER_ADDRESS: "${SERVER_ADDRESS:-localhost:39148}"
+      SERVER_ADDRESS: "${SERVER_ADDRESS:-localhost:26666}"
       PANEL_DATA_DIR: "/app/data"
       GDRIVE_SERVICE_ACCOUNT_KEY: "${GDRIVE_SERVICE_ACCOUNT_KEY:-}"
       GDRIVE_FOLDER_ID: "${GDRIVE_FOLDER_ID:-}"
