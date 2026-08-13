@@ -7,5 +7,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const status = await getStatus();
-  return NextResponse.json({ ...status, serverAddress: config.serverAddress });
+  return NextResponse.json({
+    ...status,
+    serverAddress: config.serverAddress,
+    bedrockPort: config.bedrockPort,
+  });
 }

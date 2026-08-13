@@ -30,6 +30,19 @@ services:
       interval: 30s
       retries: 10
 
+  geyser:
+    image: itzg/geyser
+    container_name: geyser
+    ports:
+      - "19132:19132/udp"
+    environment:
+      REMOTE_ADDRESS: "mc"
+      REMOTE_PORT: "25565"
+      REMOTE_AUTH_TYPE: "offline"
+    depends_on:
+      - minecraft
+    restart: unless-stopped
+
   panel:
     build: ./panel
     container_name: panel
@@ -45,6 +58,7 @@ services:
       MC_DATA_PATH: "/mc-data"
       WORLD_NAME: "${WORLD_NAME:-world}"
       SERVER_ADDRESS: "${SERVER_ADDRESS:-localhost:26666}"
+      BEDROCK_PORT: "19132"
       PANEL_DATA_DIR: "/app/data"
       GDRIVE_SERVICE_ACCOUNT_KEY: "${GDRIVE_SERVICE_ACCOUNT_KEY:-}"
       GDRIVE_FOLDER_ID: "${GDRIVE_FOLDER_ID:-}"

@@ -14,6 +14,7 @@ import {
   WifiOff,
   Copy,
   Check,
+  Smartphone,
 } from "lucide-react";
 
 interface Status {
@@ -24,6 +25,7 @@ interface Status {
   memLimitMB: number | null;
   cpuPercent: number | null;
   serverAddress: string;
+  bedrockPort: number;
 }
 
 interface PlayersInfo {
@@ -103,6 +105,7 @@ export default function Dashboard() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [copied, setCopied] = useState(false);
+  const [copiedBedrock, setCopiedBedrock] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -150,6 +153,15 @@ export default function Dashboard() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function copyBedrockAddress() {
+    const host = status?.serverAddress?.split(":")[0] || "";
+    const addr = host ? `${host}:${status?.bedrockPort ?? 19132}` : "";
+    if (!addr) return;
+    await navigator.clipboard.writeText(addr);
+    setCopiedBedrock(true);
+    setTimeout(() => setCopiedBedrock(false), 2000);
+  }
+
   const state = status?.state ?? "unknown";
   const canStart = state === "offline" || state === "unknown";
   const canStop = state === "online" || state === "starting";
@@ -176,8 +188,10 @@ export default function Dashboard() {
         }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <StatusBadge state={state} />
+            {/* Java address */}
             <button
               onClick={copyAddress}
+              title="Java Edition address"
               style={{
                 background: "none",
                 border: "1px solid var(--border)",
@@ -208,7 +222,43 @@ export default function Dashboard() {
                 <WifiOff size={13} />
               )}
               {status?.serverAddress || "…"}
+              <span style={{ fontSize: 10, opacity: 0.5 }}>Java</span>
               {copied ? <Check size={12} style={{ color: "var(--accent)" }} /> : <Copy size={12} />}
+            </button>
+            {/* Bedrock address */}
+            <button
+              onClick={copyBedrockAddress}
+              title="Bedrock Edition address (Geyser)"
+              style={{
+                background: "none",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-sm)",
+                padding: "7px 12px",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                cursor: "pointer",
+                color: "var(--text-dim)",
+                fontFamily: "var(--mono)",
+                fontSize: 13,
+                transition: "all var(--transition)",
+                width: "fit-content",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(74,222,128,0.5)";
+                (e.currentTarget as HTMLElement).style.color = "var(--green)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
+                (e.currentTarget as HTMLElement).style.color = "var(--text-dim)";
+              }}
+            >
+              <Smartphone size={13} style={{ color: "var(--green)" }} />
+              {status?.serverAddress
+                ? `${status.serverAddress.split(":")[0]}:${status.bedrockPort ?? 19132}`
+                : "…"}
+              <span style={{ fontSize: 10, opacity: 0.5 }}>Bedrock</span>
+              {copiedBedrock ? <Check size={12} style={{ color: "var(--green)" }} /> : <Copy size={12} />}
             </button>
           </div>
 

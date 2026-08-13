@@ -74,6 +74,58 @@ and a WebSocket endpoint on the same port for live console + status push.
 
 Coolify auto-deploys on push to `main`. To apply a fix, push then redeploy the
 panel app in Coolify. Container names on the VPS are Coolify-hashed except `mc`.
+
+**Important — `mc` is NOT managed by Coolify.** Only the `panel` app is a
+tracked Coolify resource (project "Panel" → app `minecraft-panel`,
+container name Coolify-hashed, e.g. `pv6ufemqwev2thes7vu51k6h-...`, on the
+`coolify` docker network). `mc` was started once by hand from
+`docker-compose.coolify.yml` and is *not* part of that Coolify app —
+redeploying/restarting the panel app in Coolify does **not** recreate `mc`.
+If `mc` is ever removed (manual `docker rm`, prune, host reboot without it
+coming back, etc.), the panel dashboard shows:
+```
+(HTTP code 404) no such container - No such container: mc
+```
+and nothing in Coolify will fix it — you must recreate the container
+manually. The `mc-data` volume persists independently, so world data
+survives this.
+
+Ops runbook — recreate `mc` from scratch:
+```bash
+# get RCON_PASSWORD Coolify's panel container expects (must match, or panel can't RCON in)
+docker inspect <panel-container-name> --format '{{range .Config.Env}}{{println .}}{{end}}' | grep RCON_PASSWORD
+
+docker run -d \
+  --name mc \
+  --network coolify \
+  -p 26666:25565 \
+  -e EULA=TRUE \
+  -e TYPE=VANILLA \
+  -e VERSION=26.2 \
+  -e ONLINE_MODE=FALSE \
+  -e MEMORY=3G \
+  -e USE_AIKAR_FLAGS=true \
+  -e ENABLE_RCON=true \
+  -e RCON_PORT=25575 \
+  -e RCON_PASSWORD=<from above> \
+  -e ENABLE_WHITELIST=false \
+  -e ENFORCE_WHITELIST=false \
+  -e OVERRIDE_WHITELIST=false \
+  -e MOTD="Personal server - powered by MC Panel" \
+  -v mc-data:/data \
+  --restart unless-stopped \
+  itzg/minecraft-server:latest
+
+docker exec -u 0 mc chown -R 1000:1000 /data
+docker restart mc
+docker logs -f mc   # wait for "Done" before expecting panel to go Online
+```
+
+Find the panel's actual container name (needed above) via:
+```
+docker inspect <candidate> | grep -i garcade   # look for COOLIFY_FQDN=minecraft.garcade.in
+```
+
 Ops runbook, e.g. fix world ownership without a redeploy:
 ```
 docker exec -u 0 mc chown -R 1000:1000 /data/world

@@ -15,6 +15,7 @@ export const config = {
   worldName: process.env.WORLD_NAME || "world",
 
   serverAddress: process.env.SERVER_ADDRESS || "localhost:25565",
+  bedrockPort: parseInt(process.env.BEDROCK_PORT || "19132", 10),
 
   gdriveKey: process.env.GDRIVE_SERVICE_ACCOUNT_KEY || "",
   gdriveFolderId: process.env.GDRIVE_FOLDER_ID || "",

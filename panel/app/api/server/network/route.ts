@@ -38,11 +38,14 @@ async function getPublicIp(): Promise<string | null> {
 
 export async function GET() {
   const [port, publicIp] = await Promise.all([getServerPort(), getPublicIp()]);
+  const bedrockPort = config.bedrockPort;
 
   return NextResponse.json({
     publicIp,
     port,
     javaAddress: publicIp ? `${publicIp}:${port}` : null,
     localAddress: config.serverAddress,
+    bedrockPort,
+    bedrockAddress: publicIp ? `${publicIp}:${bedrockPort}` : null,
   });
 }
