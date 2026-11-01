@@ -26,8 +26,13 @@ export async function POST() {
     const info = await container.inspect();
     const image = info.Config.Image || "itzg/geyser:latest";
 
-    // Pull latest image
-    await docker.pull(image);
+    // Pull latest image and wait for it to complete
+    await new Promise<void>((resolve, reject) => {
+      docker.pull(image, (err: any, stream: any) => {
+        if (err) { reject(err); return; }
+        docker.modem.followProgress(stream, (err2: any) => err2 ? reject(err2) : resolve(), () => {});
+      });
+    });
 
     // Stop and remove container
     try {
