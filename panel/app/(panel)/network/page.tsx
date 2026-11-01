@@ -15,6 +15,9 @@ interface NetworkInfo {
 export default function NetworkPage() {
   const [info, setInfo] = useState<NetworkInfo | null>(null);
   const [copied, setCopied] = useState("");
+  const [updatingGeyser, setUpdatingGeyser] = useState(false);
+  const [geyserMsg, setGeyserMsg] = useState("");
+  const [geyserMsgOk, setGeyserMsgOk] = useState(true);
 
   useEffect(() => {
     fetch("/api/server/network").then((r) => r.json()).then(setInfo);
@@ -23,6 +26,27 @@ export default function NetworkPage() {
     }, 5000);
     return () => clearInterval(id);
   }, []);
+
+  async function updateGeyser() {
+    setUpdatingGeyser(true);
+    setGeyserMsg("");
+    try {
+      const r = await fetch("/api/geyser/restart", { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) {
+        setGeyserMsg(d.error || "Failed to update Geyser");
+        setGeyserMsgOk(false);
+      } else {
+        setGeyserMsg("Geyser is restarting with latest version");
+        setGeyserMsgOk(true);
+      }
+    } catch (e: any) {
+      setGeyserMsg(e?.message || "Failed to update Geyser");
+      setGeyserMsgOk(false);
+    } finally {
+      setUpdatingGeyser(false);
+    }
+  }
 
   function copy(text: string, key: string) {
     navigator.clipboard.writeText(text);
@@ -184,9 +208,6 @@ export default function NetworkPage() {
         </div>
       </div>
 
-      {/* Geyser version management */}
-      <GeyserVersionCard />
-
       {/* Port forwarding guide */}
       <details className="card">
         <summary style={{ cursor: "pointer", fontWeight: 700, userSelect: "none", display: "flex", alignItems: "center", gap: 8 }}>
@@ -221,105 +242,6 @@ export default function NetworkPage() {
           </div>
         </div>
       </details>
-    </div>
-  );
-}
-
-function GeyserVersionCard() {
-  const [info, setInfo] = useState<{ image: string; availableImages: string[] } | null>(null);
-  const [image, setImage] = useState("");
-  const [confirm, setConfirm] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [msgOk, setMsgOk] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/geyser/version")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) { setMsg(d.error); setMsgOk(false); return; }
-        setInfo(d);
-        setImage(d.image);
-      })
-      .catch((e) => { setMsg(String(e)); setMsgOk(false); });
-  }, []);
-
-  const dirty = info && image !== info.image;
-
-  async function apply() {
-    setBusy(true);
-    setMsg("");
-    try {
-      const r = await fetch("/api/geyser/version", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image }),
-      });
-      const d = await r.json();
-      if (!r.ok) { setMsg(d.error || "Failed"); setMsgOk(false); setBusy(false); return; }
-      setMsgOk(true);
-      setMsg(`Updated to ${d.image} · ${d.note || ""}`);
-      setInfo({ image, availableImages: d.availableImages || info?.availableImages || [] });
-      setConfirm(false);
-    } catch (e: any) {
-      setMsg(e?.message || "Failed"); setMsgOk(false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!info) return null;
-
-  return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 18 }}>
-        <div style={{ width: 38, height: 38, background: "var(--green-dim)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Smartphone size={18} color="var(--green)" />
-        </div>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Geyser Version</div>
-          <div style={{ color: "var(--text-dim)", fontSize: 13, marginTop: 2 }}>
-            {info ? <>Currently running <b>{info.image}</b></> : "Loading…"}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16, marginBottom: 16 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-          <label style={{ fontSize: 11.5, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>Docker Image</label>
-          <select value={image} onChange={(e) => setImage(e.target.value)} disabled={!info}>
-            {info?.availableImages.map((img) => <option key={img} value={img}>{img}</option>)}
-          </select>
-        </div>
-      </div>
-
-      {dirty && (
-        <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "12px 14px", borderRadius: "var(--radius-sm)", background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.2)", marginBottom: 14 }}>
-          <Smartphone size={16} color="var(--green)" style={{ flexShrink: 0, marginTop: 1 }} />
-          <div style={{ fontSize: 12.5, color: "var(--text)", lineHeight: 1.5 }}>
-            Updating Geyser will restart the container. Bedrock players will be disconnected briefly.
-            <label style={{ display: "flex", gap: 7, alignItems: "center", marginTop: 8, cursor: "pointer" }}>
-              <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} style={{ width: "auto" }} />
-              I understand, update Geyser
-            </label>
-          </div>
-        </div>
-      )}
-
-      <button className="btn-primary" onClick={apply} disabled={!dirty || !confirm || busy} type="button">
-        {busy ? (
-          <><RotateCw size={14} style={{ animation: "spin 0.8s linear infinite" }} /> Updating…
-        ) : (
-          <><RotateCw size={14} /> Update Geyser</>
-        )}
-      </button>
-
-      {msg && (
-        <div style={{ marginTop: 12, fontSize: 13, color: msgOk ? "var(--green)" : "var(--danger)", display: "flex", alignItems: "flex-start", gap: 7, lineHeight: 1.5 }}>
-          {msgOk ? <Check size={14} style={{ flexShrink: 0, marginTop: 2 }} /> : <Smartphone size={14} style={{ flexShrink: 0, marginTop: 2 }} />}
-          <span>{msg}</span>
-        </div>
-      )}
     </div>
   );
 }
