@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { promises as fsp } from "fs";
 import fs from "fs";
 import path from "path";
-import { execSync } from "child_process";
 import { config } from "@/lib/config";
 import { getStatus, stopServer, startServer } from "@/lib/docker";
 
@@ -32,7 +31,9 @@ export async function POST(req: NextRequest) {
   if (!file) {
     return NextResponse.json({ error: "No file received — field must be named 'mod'" }, { status: 400 });
   }
-  if (!file.name.endsWith(".jar")) {
+  // Strip any directory parts so a crafted name can't escape the mods dir
+  const name = path.basename(file.name);
+  if (!name.endsWith(".jar")) {
     return NextResponse.json({ error: "Upload a .jar file (Fabric/Forge mod)" }, { status: 400 });
   }
 
@@ -49,21 +50,22 @@ export async function POST(req: NextRequest) {
     await new Promise((r) => setTimeout(r, 3000));
   }
 
-  const targetPath = path.join(modsPath(), file.name);
+  const targetPath = path.join(modsPath(), name);
   try {
     // Ensure mods directory exists
     fs.mkdirSync(modsPath(), { recursive: true });
 
-    // Move file to mods directory
-    await fsp.rename(filePath, targetPath);
+    // /app/data and /mc-data are different filesystems, so rename() throws
+    // EXDEV — copy then delete instead
+    await fsp.copyFile(filePath, targetPath);
 
-    // Set proper permissions (minecraft user typically runs as 1000:1000)
-    try {
-      execSync(`chown 1000:1000 "${path.resolve(targetPath)}"`, { stdio: "ignore" });
-    } catch { /* non-fatal */ }
+    // mc runs as 1000:1000 and can't read files owned by root
+    await fsp.chown(targetPath, 1000, 1000).catch(() => { /* non-fatal */ });
   } catch (e: any) {
-    await fsp.unlink(filePath).catch(() => {});
+    if (wasRunning) await startServer().catch(() => {});
     return NextResponse.json({ error: `Failed to install mod: ${e?.message}` }, { status: 500 });
+  } finally {
+    await fsp.unlink(filePath).catch(() => {});
   }
 
   // Restart server if it was running
@@ -73,7 +75,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ 
     ok: true, 
-    filename: file.name,
+    filename: name,
     restarted: wasRunning 
   });
 }
