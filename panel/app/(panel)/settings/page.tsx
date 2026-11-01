@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SlidersHorizontal, Zap, Save, RotateCcw, Timer, Check, AlertCircle, Package, AlertTriangle, Shield, Plus, Trash2, UserPlus } from "lucide-react";
+import { SlidersHorizontal, Zap, Save, RotateCcw, RotateCw, Server, Timer, Check, AlertCircle, Package, AlertTriangle, Shield, Plus, Trash2, UserPlus } from "lucide-react";
 
 const FIELD_META: Record<string, {
   label: string;
@@ -661,7 +661,7 @@ function PanelVersionCard() {
 
       <button className="btn-primary" onClick={apply} disabled={!dirty || !confirm || busy} type="button">
         {busy ? (
-          <><RotateCw size={14} style={{ animation: "spin 0.8s linear infinite" }} /> Updating…
+          <><RotateCw size={14} style={{ animation: "spin 0.8s linear infinite" }} /> Updating…</>
         ) : (
           <><RotateCw size={14} /> Update Panel</>
         )}

@@ -228,7 +228,7 @@ export default function NetworkPage() {
         <div style={{ marginTop: 16 }}>
           <button className="btn-primary" onClick={updateGeyser} disabled={updatingGeyser} type="button">
             {updatingGeyser ? (
-              <><RotateCw size={14} style={{ animation: "spin 0.8s linear infinite" }} /> Updating…
+              <><RotateCw size={14} style={{ animation: "spin 0.8s linear infinite" }} /> Updating…</>
             ) : (
               <><RotateCw size={14} /> Update Geyser to Latest</>
             )}

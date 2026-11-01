@@ -43,7 +43,7 @@ export async function POST() {
     // Recreate with new image
     const created = await docker.createContainer({
       Image: image,
-      Name: info.Name?.replace(/^\//, ""),
+      name: info.Name?.replace(/^\//, ""),
       Env: info.Config.Env ?? undefined,
       Cmd: info.Config.Cmd ?? undefined,
       Entrypoint: info.Config.Entrypoint ?? undefined,
