@@ -571,9 +571,110 @@ export default function SettingsPage() {
 
       <VersionCard />
 
+      <PanelVersionCard />
+
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
+    </div>
+  );
+}
+
+function PanelVersionCard() {
+  const [info, setInfo] = useState<{ image: string; version: string; availableImages: string[] } | null>(null);
+  const [image, setImage] = useState("");
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [msgOk, setMsgOk] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/panel/version")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.error) { setMsg(d.error); setMsgOk(false); return; }
+        setInfo(d);
+        setImage(d.image);
+      })
+      .catch((e) => { setMsg(String(e)); setMsgOk(false); });
+  }, []);
+
+  const dirty = info && image !== info.image;
+
+  async function apply() {
+    setBusy(true);
+    setMsg("");
+    try {
+      const r = await fetch("/api/panel/version", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setMsg(d.error || "Failed"); setMsgOk(false); setBusy(false); return; }
+      setMsgOk(true);
+      setMsg(`Updated panel image to ${d.image} · ${d.note || ""}`);
+      setInfo({ image, version: info?.version || "unknown", availableImages: d.availableImages || [] });
+      setConfirm(false);
+    } catch (e: any) {
+      setMsg(e?.message || "Failed"); setMsgOk(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!info) return null;
+
+  return (
+    <div className="card" style={{ marginTop: 20 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 18 }}>
+        <div style={{ width: 38, height: 38, background: "var(--purple-dim)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Server size={18} color="var(--purple)" />
+        </div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Panel Version</div>
+          <div style={{ color: "var(--text-dim)", fontSize: 13, marginTop: 2 }}>
+            {info ? <>Currently <b>{info.version}</b></> : "Loading…"}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16, marginBottom: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+          <label style={{ fontSize: 11.5, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>Docker Image</label>
+          <select value={image} onChange={(e) => setImage(e.target.value)} disabled={!info}>
+            {info?.availableImages.map((img) => <option key={img} value={img}>{img}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {dirty && (
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "12px 14px", borderRadius: "var(--radius-sm)", background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)", marginBottom: 14 }}>
+          <Server size={16} color="var(--purple)" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ fontSize: 12.5, color: "var(--text)", lineHeight: 1.5 }}>
+            Updating the panel will restart the container. Panel will be temporarily unavailable.
+            <label style={{ display: "flex", gap: 7, alignItems: "center", marginTop: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} style={{ width: "auto" }} />
+              I understand, update Panel
+            </label>
+          </div>
+        </div>
+      )}
+
+      <button className="btn-primary" onClick={apply} disabled={!dirty || !confirm || busy} type="button">
+        {busy ? (
+          <><RotateCw size={14} style={{ animation: "spin 0.8s linear infinite" }} /> Updating…
+        ) : (
+          <><RotateCw size={14} /> Update Panel</>
+        )}
+      </button>
+
+      {msg && (
+        <div style={{ marginTop: 12, fontSize: 13, color: msgOk ? "var(--purple)" : "var(--danger)", display: "flex", alignItems: "flex-start", gap: 7, lineHeight: 1.5 }}>
+          {msgOk ? <Check size={14} style={{ flexShrink: 0, marginTop: 2 }} /> : <Server size={14} style={{ flexShrink: 0, marginTop: 2 }} />}
+          <span>{msg}</span>
+        </div>
+      )}
     </div>
   );
 }
