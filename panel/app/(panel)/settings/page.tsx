@@ -571,8 +571,6 @@ export default function SettingsPage() {
 
       <VersionCard />
 
-      <PanelVersionCard />
-
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
