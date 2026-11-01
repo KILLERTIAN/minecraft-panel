@@ -208,6 +208,40 @@ export default function NetworkPage() {
         </div>
       </div>
 
+      {/* Geyser update */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+          <div style={{ width: 38, height: 38, background: "var(--green-dim)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Smartphone size={18} color="var(--green)" />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Geyser</div>
+            <div style={{ color: "var(--text-dim)", fontSize: 13, marginTop: 2 }}>
+              Bedrock proxy server
+            </div>
+          </div>
+          <span className="badge badge-online" style={{ marginLeft: "auto", flexShrink: 0 }}>
+            <span className="dot" />
+            Running
+          </span>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <button className="btn-primary" onClick={updateGeyser} disabled={updatingGeyser} type="button">
+            {updatingGeyser ? (
+              <><RotateCw size={14} style={{ animation: "spin 0.8s linear infinite" }} /> Updating…
+            ) : (
+              <><RotateCw size={14} /> Update Geyser to Latest</>
+            )}
+          </button>
+          {geyserMsg && (
+            <div style={{ marginTop: 10, fontSize: 13, color: geyserMsgOk ? "var(--green)" : "var(--danger)", display: "flex", alignItems: "center", gap: 6 }}>
+              {geyserMsgOk ? <Check size={14} /> : <Smartphone size={14} />}
+              {geyserMsg}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Port forwarding guide */}
       <details className="card">
         <summary style={{ cursor: "pointer", fontWeight: 700, userSelect: "none", display: "flex", alignItems: "center", gap: 8 }}>
