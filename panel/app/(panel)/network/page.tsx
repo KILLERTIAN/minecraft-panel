@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Network, Copy, Check, Wifi, Globe, Server, BookOpen, Terminal, Smartphone } from "lucide-react";
+import { Network, Copy, Check, Wifi, Globe, Server, BookOpen, Terminal, Smartphone, RotateCw } from "lucide-react";
 
 interface NetworkInfo {
   publicIp: string | null;
@@ -15,6 +15,9 @@ interface NetworkInfo {
 export default function NetworkPage() {
   const [info, setInfo] = useState<NetworkInfo | null>(null);
   const [copied, setCopied] = useState("");
+  const [updatingGeyser, setUpdatingGeyser] = useState(false);
+  const [geyserMsg, setGeyserMsg] = useState("");
+  const [geyserMsgOk, setGeyserMsgOk] = useState(true);
 
   useEffect(() => {
     fetch("/api/server/network").then((r) => r.json()).then(setInfo);
@@ -23,6 +26,27 @@ export default function NetworkPage() {
     }, 5000);
     return () => clearInterval(id);
   }, []);
+
+  async function updateGeyser() {
+    setUpdatingGeyser(true);
+    setGeyserMsg("");
+    try {
+      const r = await fetch("/api/geyser/restart", { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) {
+        setGeyserMsg(d.error || "Failed to update Geyser");
+        setGeyserMsgOk(false);
+      } else {
+        setGeyserMsg("Geyser is restarting with latest version");
+        setGeyserMsgOk(true);
+      }
+    } catch (e: any) {
+      setGeyserMsg(e?.message || "Failed to update Geyser");
+      setGeyserMsgOk(false);
+    } finally {
+      setUpdatingGeyser(false);
+    }
+  }
 
   function copy(text: string, key: string) {
     navigator.clipboard.writeText(text);
@@ -181,6 +205,40 @@ export default function NetworkPage() {
         </div>
         <div style={{ color: "var(--text-dim)", fontSize: 12.5, marginTop: 10 }}>
           Minecraft (Bedrock) → Play → Servers → Add Server → paste address above
+        </div>
+      </div>
+
+      {/* Geyser update */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+          <div style={{ width: 38, height: 38, background: "var(--green-dim)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Smartphone size={18} color="var(--green)" />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Geyser</div>
+            <div style={{ color: "var(--text-dim)", fontSize: 13, marginTop: 2 }}>
+              Bedrock proxy server
+            </div>
+          </div>
+          <span className="badge badge-online" style={{ marginLeft: "auto", flexShrink: 0 }}>
+            <span className="dot" />
+            Running
+          </span>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <button className="btn-primary" onClick={updateGeyser} disabled={updatingGeyser} type="button">
+            {updatingGeyser ? (
+              <><RotateCw size={14} style={{ animation: "spin 0.8s linear infinite" }} /> Updating…
+            ) : (
+              <><RotateCw size={14} /> Update Geyser to Latest</>
+            )}
+          </button>
+          {geyserMsg && (
+            <div style={{ marginTop: 10, fontSize: 13, color: geyserMsgOk ? "var(--green)" : "var(--danger)", display: "flex", alignItems: "center", gap: 6 }}>
+              {geyserMsgOk ? <Check size={14} /> : <Smartphone size={14} />}
+              {geyserMsg}
+            </div>
+          )}
         </div>
       </div>
 

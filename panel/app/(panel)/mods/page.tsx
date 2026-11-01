@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Package, Loader2, HardDrive } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Package, Loader2, HardDrive, Upload } from "lucide-react";
 
 interface ModInfo {
   filename: string;
@@ -25,14 +25,58 @@ function cleanName(filename: string): string {
 export default function ModsPage() {
   const [mods, setMods] = useState<ModInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState("");
+  const [uploadMsgOk, setUploadMsgOk] = useState(true);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const refresh = async () => {
+    const d = await fetch("/api/server/mods").then((r) => r.json()).catch(() => ({ mods: [] }));
+    setMods(d.mods);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    fetch("/api/server/mods")
-      .then((r) => r.json())
-      .then((d) => { setMods(d.mods); setLoading(false); });
+    refresh();
   }, []);
 
   const enabled = mods.filter((m) => m.enabled).length;
+
+  async function uploadMod(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith(".jar")) {
+      setUploadMsg("File must be a .jar file (Fabric/Forge mod)");
+      setUploadMsgOk(false);
+      return;
+    }
+    if (!confirm(`Upload "${file.name}" as a mod?\n\nThis will stop the server, install the mod, and restart.`)) {
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    setUploading(true);
+    setUploadMsg("");
+    const form = new FormData();
+    form.append("mod", file);
+    try {
+      const r = await fetch("/api/mods/upload", { method: "POST", body: form });
+      const d = await r.json();
+      if (!r.ok) {
+        setUploadMsg(d.error || "Upload failed");
+        setUploadMsgOk(false);
+      } else {
+        setUploadMsg(d.restarted ? `Mod installed · Server restarted` : `Mod installed · Server was offline`);
+        setUploadMsgOk(true);
+        refresh();
+      }
+    } catch (err: any) {
+      setUploadMsg(err?.message || "Upload failed");
+      setUploadMsgOk(false);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
 
   return (
     <div className="animate-in">
@@ -109,13 +153,50 @@ export default function ModsPage() {
         </div>
       )}
 
+      {/* Upload Mod Card */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+          <div style={{ width: 38, height: 38, background: "var(--accent-dim)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Upload size={18} color="var(--accent)" />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Install Mod</div>
+            <div style={{ color: "var(--text-dim)", fontSize: 13, marginTop: 2 }}>
+              Upload a .jar file to add a Fabric or Forge mod to your server.
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 16 }}>
+          <button
+            className="btn-primary"
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <Loader2 size={15} style={{ animation: "spin 0.8s linear infinite" }} />
+            ) : (
+              <Upload size={15} />
+            )}
+            {uploading ? "Uploading…" : "Upload .jar Mod"}
+          </button>
+          <input ref={fileRef} type="file" accept=".jar" style={{ display: "none" }} onChange={uploadMod} />
+        </div>
+        {uploadMsg && (
+          <div style={{ marginTop: 10, fontSize: 13, color: uploadMsgOk ? "var(--accent)" : "var(--danger)", display: "flex", alignItems: "center", gap: 6 }}>
+            {uploadMsgOk ? <span style={{ fontSize: 13 }}>✔</span> : <span style={{ fontSize: 13 }}>⚠</span>}
+            {uploadMsg}
+          </div>
+        )}
+      </div>
+
       <div className="card" style={{ background: "rgba(79,142,247,0.05)", border: "1px solid rgba(79,142,247,0.15)" }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
           <Package size={15} color="var(--blue)" style={{ flexShrink: 0, marginTop: 1 }} />
           <div style={{ fontSize: 13, color: "var(--text-mid)", lineHeight: 1.6 }}>
-            To add mods: place <code style={{ fontFamily: "var(--mono)", background: "var(--bg-elev2)", padding: "1px 6px", borderRadius: 4 }}>.jar</code> files in the{" "}
+            <strong>Note:</strong> To manually add mods, place <code style={{ fontFamily: "var(--mono)", background: "var(--bg-elev2)", padding: "1px 6px", borderRadius: 4 }}>.jar</code> files in the{" "}
             <code style={{ fontFamily: "var(--mono)", background: "var(--bg-elev2)", padding: "1px 6px", borderRadius: 4 }}>mods/</code> folder inside your{" "}
-            <code style={{ fontFamily: "var(--mono)", background: "var(--bg-elev2)", padding: "1px 6px", borderRadius: 4 }}>mc-data</code> volume, then restart the server.
+            <code style={{ fontFamily: "var(--mono)", background: "var(--bg-elev2)", padding: "1px 6px", borderRadius: 4 }}>mc-data</code> volume.
           </div>
         </div>
       </div>
