@@ -139,6 +139,34 @@ docker restart mc
 `RCON_PASSWORD`, `BACKUP_SCHEDULE`, `BACKUP_RETENTION_DAYS`,
 `GDRIVE_SERVICE_ACCOUNT_KEY`, `GDRIVE_FOLDER_ID`.
 
+## Performance tuning applied
+
+These env vars are set on the `mc` container (see `docker-compose.yml` and
+`docker-compose.coolify.yml`) to address login lag and false-positive anti-cheat
+warnings observed in production logs (Nov 2026):
+
+| Env var | Value | Reason |
+|---|---|---|
+| `MEMORY` | `4G` | Extra heap room for chunk-load bursts on join |
+| `PAUSE_WHEN_EMPTY_SECONDS` | `0` | Disables JVM-level pause; cold-wakeup was causing 2–14 s login freezes. Panel idle-shutdown handles empty-server stops instead. |
+| `MAX_PLAYER_IDLE_TIMEOUT` | `0` | Suppress false-positive idle kicks triggered by lag |
+| `NETWORK_COMPRESSION_THRESHOLD` | `256` | Lower packet-compression overhead on the server thread |
+
+Also set via panel Settings → server.properties:
+- `view-distance=6` (default 10)
+- `simulation-distance=4` (default 10)
+
+**Fix 5 — pre-generating spawn chunks (vanilla forceload):**
+Chunky is not available on vanilla. Use the built-in `/forceload` command from
+the panel Console page to permanently load a radius of chunks around the main
+base (replace coords with your actual base location):
+```
+/forceload add -400 60 -300 130
+```
+This keeps that chunk region always loaded and prevents generation lag on login.
+Run `/forceload query` to verify. Note: forceloaded chunks do count against tick
+budget even when empty — keep the radius small.
+
 ## Conventions
 
 - Server is offline-mode (`ONLINE_MODE: FALSE`); resolve names via

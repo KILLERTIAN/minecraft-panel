@@ -11,7 +11,7 @@ services:
       TYPE: "VANILLA"
       VERSION: "26.2"
       ONLINE_MODE: "FALSE"
-      MEMORY: "${MC_MEMORY:-3G}"
+      MEMORY: "${MC_MEMORY:-4G}"
       USE_AIKAR_FLAGS: "true"
       ENABLE_RCON: "true"
       RCON_PORT: "25575"
@@ -21,6 +21,14 @@ services:
       OVERRIDE_WHITELIST: "false"
       MODRINTH_PROJECTS: ""
       MOTD: "Personal server - powered by MC Panel"
+      # Fix 3: disable JVM-level pause — players no longer hit a cold-wakeup
+      # lag spike on join. The panel's idle-shutdown (scheduler.ts) handles
+      # stopping the server when empty instead.
+      PAUSE_WHEN_EMPTY_SECONDS: "0"
+      # Fix 4: suppress false-positive "moved too quickly" kicks caused by lag;
+      # lower compression threshold reduces server-thread packet overhead.
+      MAX_PLAYER_IDLE_TIMEOUT: "0"
+      NETWORK_COMPRESSION_THRESHOLD: "256"
     volumes:
       - mc-data:/data
     restart: unless-stopped
